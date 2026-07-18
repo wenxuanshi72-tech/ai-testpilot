@@ -63,13 +63,13 @@ Mock mode is limited to unit, offline, fault-injection, and stable regression te
 | Test execution  | pytest, HTTPX/requests, Playwright for Python, JSON Schema, JUnit XML           |
 | Quality         | Ruff, mypy, ESLint, Prettier, TypeScript, coverage                              |
 
-Phase 1 supplemental acceptance installed the declared dependencies locally, recorded the npm lockfile, and validated the foundation shells without implementing business behavior. Phase 2 implemented the SUT Flask authentication backend. Phase 3 now verifies that backend through a live HTTP boundary.
+Phase 1 established the verified toolchain, Phase 2 implemented the Flask authentication backend, Phase 3 proved its public API, and Phase 4 implements the accessible React authentication experience.
 
 ## Current phase
 
-**Phase 3 — live SUT black-box API acceptance and protected-defect verification.**
+**Phase 4 — accessible React SUT authentication frontend and live backend integration.**
 
-Phase 0 established the approved contract and architecture, Phase 1 added the engineering foundation, and Phase 2 implemented the Flask authentication backend. Phase 3 adds a manual API case baseline, real HTTP pytest acceptance, redacted runtime evidence, and strict XFAIL proof of the protected seeded defect. The SUT frontend business UI, Plugin, AI providers, general execution engine, formal bug/report artifacts, and later-phase workflows remain unimplemented.
+The SUT now provides responsive registration, login, session restoration, protected profile, logout, and 404 routes through a typed credentialed Axios client. Component tests and real Vite/Flask integration preserve BUG-AUTH-001: the UI intentionally permits z1234 to reach the defective backend. Plugin business behavior, AI providers, execution engines, formal bug/report artifacts, and later workflows remain unimplemented.
 
 ## Repository map
 
@@ -115,6 +115,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify_phase3.ps1
 
 The Phase 3 verifier starts a migrated SUT on loopback, runs 20 ordinary black-box cases plus one strict known-defect XFAIL, saves redacted ignored evidence under `artifacts/logs/phase3/`, and cleans up its exact process and temporary database.
 
+Run the Phase 4 frontend and live integration verifier:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify_phase4.ps1
+```
+
+It validates both frontend workspaces, runs the Python and Phase 3 baselines, starts real Vite and Flask services with isolated databases, verifies CORS/cookie flows and the seeded 201 response, then releases its ports and temporary data.
+
 The prerequisite and Phase 1 scripts do not install, delete, repair, or print environment-variable values. The Phase 3 verifier deletes only the unique temporary database directory it creates for its own run.
 
 ## Environment and security
@@ -125,9 +133,9 @@ The planned SUT authentication mechanism is a server-side opaque session deliver
 
 ## API and UI testing targets
 
-Phase 3 API acceptance issues real local HTTP requests and validates status codes, headers, JSON fields, session behavior, and the protected requirement mismatch with a fixed pytest baseline. It is not yet the Plugin's general execution engine. Future UI automation will use Playwright for Python with stable `data-testid`, role, label, or placeholder locators and deterministic assertions. Required UI failure evidence will include screenshots and traces under the approved retention policy.
+Phase 3 API acceptance issues real local HTTP requests and validates status codes, headers, JSON fields, session behavior, and the protected requirement mismatch. Phase 4 adds Vitest component/router coverage and real frontend/backend HTTP integration, but it is not the Plugin's general execution engine or formal UI acceptance. Future UI automation will use Playwright for Python with stable semantic locators and deterministic assertions.
 
-UI automation is not implemented or executed in Phase 3.
+Formal Playwright UI automation is not implemented or executed in Phase 4.
 
 ## Planned exports
 
@@ -151,4 +159,4 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for phase-by-phase inputs, outputs, accep
 
 ## Truthfulness statement
 
-Current committed foundation and SUT backend files, together with local Phase 3 runtime evidence, prove dependency/tooling acceptance, live SUT API execution, and detection of the protected seeded defect for the documented run. They do not prove that DeepSeek responds, the SUT UI works, the Plugin executes tests, or formal bugs and reports are generated. Such claims require their corresponding later phases and real evidence. Results, model calls, screenshots, traces, bugs, reports, and metrics must never be fabricated.
+Current SUT sources and local Phase 4 runtime evidence prove automated frontend behavior, builds, live HTTP integration, credentialed session flow, and preservation of the seeded defect for the documented run. Manual visual review remains separately identified. They do not prove that DeepSeek responds, the Plugin executes tests, or formal bugs and reports are generated. Such claims require later phases and real evidence.

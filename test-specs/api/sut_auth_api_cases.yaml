@@ -1,0 +1,283 @@
+schema_version: "1.0"
+suite_id: SUT-AUTH-API-BASELINE
+title: SUT authentication black-box API baseline
+generation_source: manual_baseline
+execution_engine: pytest_black_box
+base_path: /api
+cases:
+  - {
+      case_id: API-AUTH-HEALTH-001,
+      title: Health endpoint is ready and non-sensitive,
+      source_requirement_ids: [AUTH-HEALTH-001],
+      priority: P0,
+      preconditions: [running migrated SUT],
+      request: { method: GET, path: /api/health },
+      expected_status: 200,
+      expected_response: { data.status: ok },
+      assertions: [status, JSON envelope, request ID],
+      tags: [health, smoke],
+      seeded_defect_relation: none,
+    }
+  - {
+      case_id: API-AUTH-REGISTER-001,
+      title: Register a valid unique user,
+      source_requirement_ids: [AUTH-REG-001, AUTH-REG-003, AUTH-SESSION-001],
+      priority: P0,
+      preconditions: [unique generated username],
+      request: { method: POST, path: /api/auth/register, fixture: valid_registration },
+      expected_status: 201,
+      expected_response: { data.username: normalized },
+      assertions: [status, public user, cookie attributes],
+      tags: [registration, session],
+      seeded_defect_relation: none,
+    }
+  - {
+      case_id: API-AUTH-REGISTER-002,
+      title: Reject a duplicate normalized username,
+      source_requirement_ids: [AUTH-REG-005],
+      priority: P0,
+      preconditions: [username already registered],
+      request: { method: POST, path: /api/auth/register, fixture: duplicate_registration },
+      expected_status: 409,
+      expected_response: { error.code: USERNAME_EXISTS },
+      assertions: [status, safe error envelope],
+      tags: [registration, negative],
+      seeded_defect_relation: none,
+    }
+  - {
+      case_id: API-AUTH-REGISTER-003,
+      title: Reject registration without username,
+      source_requirement_ids: [AUTH-REG-001, AUTH-ERROR-001],
+      priority: P1,
+      preconditions: [],
+      request: { method: POST, path: /api/auth/register, fixture: missing_username },
+      expected_status: 400,
+      expected_response: { error.code: VALIDATION_ERROR },
+      assertions: [status, username detail],
+      tags: [registration, validation],
+      seeded_defect_relation: none,
+    }
+  - {
+      case_id: API-AUTH-REGISTER-004,
+      title: Reject registration without password,
+      source_requirement_ids: [AUTH-REG-003, AUTH-ERROR-001],
+      priority: P1,
+      preconditions: [],
+      request: { method: POST, path: /api/auth/register, fixture: missing_password },
+      expected_status: 400,
+      expected_response: { error.code: VALIDATION_ERROR },
+      assertions: [status, password detail],
+      tags: [registration, validation],
+      seeded_defect_relation: none,
+    }
+  - {
+      case_id: API-AUTH-REGISTER-005,
+      title: Reject non-JSON registration,
+      source_requirement_ids: [AUTH-HTTP-001],
+      priority: P1,
+      preconditions: [],
+      request: { method: POST, path: /api/auth/register, fixture: form_body },
+      expected_status: 415,
+      expected_response: { error.code: UNSUPPORTED_MEDIA_TYPE },
+      assertions: [status, error code],
+      tags: [transport, validation],
+      seeded_defect_relation: none,
+    }
+  - {
+      case_id: API-AUTH-REGISTER-006,
+      title: Reject malformed JSON,
+      source_requirement_ids: [AUTH-HTTP-002],
+      priority: P1,
+      preconditions: [],
+      request: { method: POST, path: /api/auth/register, fixture: malformed_json },
+      expected_status: 400,
+      expected_response: { error.code: MALFORMED_JSON },
+      assertions: [status, error code],
+      tags: [transport, validation],
+      seeded_defect_relation: none,
+    }
+  - {
+      case_id: API-AUTH-REGISTER-007,
+      title: Reject illegal username characters,
+      source_requirement_ids: [AUTH-REG-002],
+      priority: P1,
+      preconditions: [],
+      request: { method: POST, path: /api/auth/register, fixture: illegal_username },
+      expected_status: 400,
+      expected_response: { error.details.code: invalid_format },
+      assertions: [status, field detail],
+      tags: [registration, validation],
+      seeded_defect_relation: none,
+    }
+  - {
+      case_id: API-AUTH-REGISTER-008,
+      title: Reject username longer than 32 characters,
+      source_requirement_ids: [REQ-AUTH-USERNAME-001],
+      priority: P1,
+      preconditions: [],
+      request: { method: POST, path: /api/auth/register, fixture: long_username },
+      expected_status: 400,
+      expected_response: { error.details.code: too_long },
+      assertions: [status, field detail],
+      tags: [registration, boundary],
+      seeded_defect_relation: related_requirement_non_seeded_boundary,
+    }
+  - {
+      case_id: API-AUTH-REGISTER-009,
+      title: Reject weak password,
+      source_requirement_ids: [AUTH-REG-003],
+      priority: P0,
+      preconditions: [],
+      request: { method: POST, path: /api/auth/register, fixture: weak_password },
+      expected_status: 400,
+      expected_response: { error.details.code: password_policy },
+      assertions: [status, field detail],
+      tags: [registration, security],
+      seeded_defect_relation: none,
+    }
+  - {
+      case_id: API-AUTH-LOGIN-001,
+      title: Login with valid credentials,
+      source_requirement_ids: [AUTH-LOGIN-001, AUTH-SESSION-001],
+      priority: P0,
+      preconditions: [registered user and logged-out client],
+      request: { method: POST, path: /api/auth/login, fixture: valid_login },
+      expected_status: 200,
+      expected_response: { data.username: registered username },
+      assertions: [status, session cookie],
+      tags: [login, session],
+      seeded_defect_relation: none,
+    }
+  - {
+      case_id: API-AUTH-LOGIN-002,
+      title: Reject incorrect password generically,
+      source_requirement_ids: [AUTH-LOGIN-002],
+      priority: P0,
+      preconditions: [registered user],
+      request: { method: POST, path: /api/auth/login, fixture: wrong_password },
+      expected_status: 401,
+      expected_response: { error.code: INVALID_CREDENTIALS },
+      assertions: [status, generic error],
+      tags: [login, negative],
+      seeded_defect_relation: none,
+    }
+  - {
+      case_id: API-AUTH-LOGIN-003,
+      title: Reject nonexistent user generically,
+      source_requirement_ids: [AUTH-LOGIN-002],
+      priority: P1,
+      preconditions: [unique nonexistent username],
+      request: { method: POST, path: /api/auth/login, fixture: nonexistent_user },
+      expected_status: 401,
+      expected_response: { error.code: INVALID_CREDENTIALS },
+      assertions: [status, generic error],
+      tags: [login, negative],
+      seeded_defect_relation: none,
+    }
+  - {
+      case_id: API-AUTH-ME-001,
+      title: Return current user with session cookie,
+      source_requirement_ids: [AUTH-ME-001, AUTH-SESSION-002],
+      priority: P0,
+      preconditions: [authenticated cookie-aware client],
+      request: { method: GET, path: /api/auth/me },
+      expected_status: 200,
+      expected_response: { data.username: authenticated username },
+      assertions: [status, public fields],
+      tags: [session, current-user],
+      seeded_defect_relation: none,
+    }
+  - {
+      case_id: API-AUTH-ME-002,
+      title: Reject current-user lookup without session,
+      source_requirement_ids: [AUTH-ME-002],
+      priority: P0,
+      preconditions: [new cookie-free client],
+      request: { method: GET, path: /api/auth/me },
+      expected_status: 401,
+      expected_response: { error.code: AUTHENTICATION_REQUIRED },
+      assertions: [status, error envelope],
+      tags: [session, negative],
+      seeded_defect_relation: none,
+    }
+  - {
+      case_id: API-AUTH-LOGOUT-001,
+      title: Logout revokes current session,
+      source_requirement_ids: [AUTH-LOGOUT-001],
+      priority: P0,
+      preconditions: [authenticated client],
+      request: { method: POST, path: /api/auth/logout },
+      expected_status: 204,
+      expected_response: { body: empty },
+      assertions: [status, empty body, cookie deletion],
+      tags: [logout, session],
+      seeded_defect_relation: none,
+    }
+  - {
+      case_id: API-AUTH-SESSION-001,
+      title: Logout makes the previous session unusable,
+      source_requirement_ids: [AUTH-LOGOUT-001, AUTH-ME-002],
+      priority: P0,
+      preconditions: [authenticated then logged-out client],
+      request: { method: GET, path: /api/auth/me },
+      expected_status: 401,
+      expected_response: { error.code: AUTHENTICATION_REQUIRED },
+      assertions: [status after logout],
+      tags: [session, revocation],
+      seeded_defect_relation: none,
+    }
+  - {
+      case_id: API-AUTH-SESSION-002,
+      title: Cookie-aware client maintains authentication,
+      source_requirement_ids: [AUTH-SESSION-002, AUTH-ME-001],
+      priority: P0,
+      preconditions: [successful registration],
+      request: { method: GET, path: /api/auth/me },
+      expected_status: 200,
+      expected_response: { data.username: registered username },
+      assertions: [automatic cookie reuse, status],
+      tags: [session, cookie],
+      seeded_defect_relation: none,
+    }
+  - {
+      case_id: API-AUTH-REQUEST-001,
+      title: Valid request ID is propagated,
+      source_requirement_ids: [AUTH-ERROR-001],
+      priority: P1,
+      preconditions: [],
+      request: { method: GET, path: /api/health, fixture: safe_request_id },
+      expected_status: 200,
+      expected_response: { meta.request_id: supplied value },
+      assertions: [header and JSON ID equality],
+      tags: [transport, traceability],
+      seeded_defect_relation: none,
+    }
+  - {
+      case_id: API-AUTH-ERROR-001,
+      title: Unknown path returns uniform error envelope,
+      source_requirement_ids: [AUTH-ERROR-001],
+      priority: P1,
+      preconditions: [],
+      request: { method: GET, path: /api/not-found },
+      expected_status: 404,
+      expected_response: { error.code: NOT_FOUND },
+      assertions: [status, code, details, retryable, request ID],
+      tags: [error-contract],
+      seeded_defect_relation: none,
+    }
+  - case_id: API-AUTH-SEED-001
+    title: Reject username shorter than six characters
+    source_requirement_ids: [REQ-AUTH-USERNAME-001]
+    priority: P0
+    preconditions: [unique isolated database]
+    request: { method: POST, path: /api/auth/register, fixture: z1234_and_Test1234 }
+    expected_status: 400
+    expected_response: { error.code: VALIDATION_ERROR, error.details.code: too_short }
+    assertions: [formal minimum-six requirement]
+    tags: [known-defect, seeded-defect, formal-requirement]
+    seeded_defect_relation:
+      {
+        actual_seeded_status: 201,
+        linked_bug: BUG-AUTH-001,
+        classification: known_seeded_product_defect,
+      }

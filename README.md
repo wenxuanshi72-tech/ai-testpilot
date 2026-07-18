@@ -63,13 +63,13 @@ Mock mode is limited to unit, offline, fault-injection, and stable regression te
 | Test execution  | pytest, HTTPX/requests, Playwright for Python, JSON Schema, JUnit XML           |
 | Quality         | Ruff, mypy, ESLint, Prettier, TypeScript, coverage                              |
 
-Phase 1 supplemental acceptance installs the declared dependencies locally, records the npm lockfile, and validates the foundation shells without implementing business behavior.
+Phase 1 supplemental acceptance installed the declared dependencies locally, recorded the npm lockfile, and validated the foundation shells without implementing business behavior. Phase 2 implemented the SUT Flask authentication backend. Phase 3 now verifies that backend through a live HTTP boundary.
 
 ## Current phase
 
-**Phase 1 鈥?repository structure, environment configuration, and engineering foundation.**
+**Phase 3 — live SUT black-box API acceptance and protected-defect verification.**
 
-Phase 0 established the approved contract and architecture. Phase 1 adds repository layout, tooling manifests, minimal non-business frontend shells, development checks, and contributor/decision documentation. Registration, Flask routes, databases, PRD analysis, providers, executors, evidence, bugs, reports, and production UI remain unimplemented.
+Phase 0 established the approved contract and architecture, Phase 1 added the engineering foundation, and Phase 2 implemented the Flask authentication backend. Phase 3 adds a manual API case baseline, real HTTP pytest acceptance, redacted runtime evidence, and strict XFAIL proof of the protected seeded defect. The SUT frontend business UI, Plugin, AI providers, general execution engine, formal bug/report artifacts, and later-phase workflows remain unimplemented.
 
 ## Repository map
 
@@ -107,7 +107,15 @@ Run the Phase 1 structural verifier:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify_phase1.ps1
 ```
 
-Neither script installs, deletes, repairs, or prints environment-variable values.
+Run the Phase 3 live API verifier:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify_phase3.ps1
+```
+
+The Phase 3 verifier starts a migrated SUT on loopback, runs 20 ordinary black-box cases plus one strict known-defect XFAIL, saves redacted ignored evidence under `artifacts/logs/phase3/`, and cleans up its exact process and temporary database.
+
+The prerequisite and Phase 1 scripts do not install, delete, repair, or print environment-variable values. The Phase 3 verifier deletes only the unique temporary database directory it creates for its own run.
 
 ## Environment and security
 
@@ -117,9 +125,9 @@ The planned SUT authentication mechanism is a server-side opaque session deliver
 
 ## API and UI testing targets
 
-Future API automation will issue real HTTP requests and validate status codes, headers, JSON fields/schemas, and domain rules. Future UI automation will use Playwright for Python with stable `data-testid`, role, label, or placeholder locators and deterministic assertions. Required failure evidence includes redacted request/response summaries and, for UI failures, screenshots/traces under retention policy.
+Phase 3 API acceptance issues real local HTTP requests and validates status codes, headers, JSON fields, session behavior, and the protected requirement mismatch with a fixed pytest baseline. It is not yet the Plugin's general execution engine. Future UI automation will use Playwright for Python with stable `data-testid`, role, label, or placeholder locators and deterministic assertions. Required UI failure evidence will include screenshots and traces under the approved retention policy.
 
-Neither capability is implemented or executed in Phase 1.
+UI automation is not implemented or executed in Phase 3.
 
 ## Planned exports
 
@@ -143,4 +151,4 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for phase-by-phase inputs, outputs, accep
 
 ## Truthfulness statement
 
-Current files and configuration prove only the documented repository foundation. They do not prove that dependencies install, services run, DeepSeek responds, tests execute, the seeded defect is detected, or reports are generated. Such claims require the corresponding later phase and real acceptance evidence. Results, model calls, screenshots, traces, bugs, reports, and metrics must never be fabricated.
+Current committed foundation and SUT backend files, together with local Phase 3 runtime evidence, prove dependency/tooling acceptance, live SUT API execution, and detection of the protected seeded defect for the documented run. They do not prove that DeepSeek responds, the SUT UI works, the Plugin executes tests, or formal bugs and reports are generated. Such claims require their corresponding later phases and real evidence. Results, model calls, screenshots, traces, bugs, reports, and metrics must never be fabricated.

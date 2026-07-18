@@ -1,0 +1,23 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.py]
+indent_style = space
+indent_size = 4
+
+[{*.ts,*.tsx,*.js,*.jsx,*.json,*.jsonc,*.yml,*.yaml,*.md,*.html,*.css,*.toml}]
+indent_style = space
+indent_size = 2
+
+[*.md]
+# Preserve intentional two-space Markdown hard breaks.
+trim_trailing_whitespace = false
+
+[*.ps1]
+indent_style = space
+indent_size = 4

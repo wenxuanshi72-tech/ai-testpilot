@@ -30,12 +30,20 @@ blob-report/
 traces/
 videos/
 
-# Generated local evidence, reports, and logs
-artifacts/evidence/
-artifacts/reports/
-evidence/
-reports/generated/
-logs/
+# Generated local evidence, reports, bugs, exports, and logs
+artifacts/evidence/*
+!artifacts/evidence/.gitkeep
+artifacts/reports/*
+!artifacts/reports/.gitkeep
+artifacts/bugs/*
+!artifacts/bugs/.gitkeep
+artifacts/exports/*
+!artifacts/exports/.gitkeep
+artifacts/logs/*
+!artifacts/logs/.gitkeep
+/evidence/
+/reports/generated/
+/logs/
 *.log
 
 # Temporary files

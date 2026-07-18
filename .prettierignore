@@ -1,0 +1,14 @@
+.git/
+node_modules/
+dist/
+coverage/
+artifacts/
+*.pdf
+*.zip
+# Phase 0 contract documents are approved source artifacts and are not
+# mechanically reformatted during the Phase 1 toolchain supplement.
+docs/architecture/
+docs/design/DESIGN_DIRECTION.md
+docs/PROJECT_CONTRACT.md
+docs/ROADMAP.md
+docs/testing/ACCEPTANCE_STRATEGY.md

@@ -39,10 +39,14 @@ quality = [
 packages = []
 
 [tool.pytest.ini_options]
-addopts = ["--strict-config", "--strict-markers", "-ra"]
+addopts = ["--strict-config", "--strict-markers", "-ra", "-m", "not black_box"]
 minversion = "8.3"
 testpaths = ["tests", "sut/backend/tests", "plugin/backend/tests"]
 xfail_strict = true
+markers = [
+  "black_box: requires a separately running SUT and uses only its public HTTP API",
+  "known_defect: formal requirement test for a reviewed known product defect",
+]
 
 [tool.coverage.run]
 branch = true

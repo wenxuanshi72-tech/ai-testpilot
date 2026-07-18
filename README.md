@@ -12,8 +12,8 @@ The project is intended as a portfolio-grade reference for QA engineers, SDETs, 
 
 AI TestPilot contains two separate local systems:
 
-- **SUT** — a React/Vite/TypeScript frontend and Python 3.11/Flask backend for registration, login, current-user lookup, logout, session protection, and 404 behavior.
-- **Testing plugin** — a React frontend and Flask-based backend that will manage PRDs, structured requirements, reviewed test specifications, deterministic execution, evidence, local bug/report artifacts, and regression traceability.
+- **SUT** 鈥?a React/Vite/TypeScript frontend and Python 3.11/Flask backend for registration, login, current-user lookup, logout, session protection, and 404 behavior.
+- **Testing plugin** 鈥?a React frontend and Flask-based backend that will manage PRDs, structured requirements, reviewed test specifications, deterministic execution, evidence, local bug/report artifacts, and regression traceability.
 
 The SUT and plugin own separate SQLite databases (`sut.db` and `plugin.db`). They do not join across database boundaries. The plugin reaches the SUT only through its public API and UI.
 
@@ -54,20 +54,20 @@ Mock mode is limited to unit, offline, fault-injection, and stable regression te
 
 ## Technology direction
 
-| Area | Planned technologies |
-|---|---|
-| SUT frontend | React, Vite, TypeScript, Axios, React Router, Ant Design |
-| SUT backend | Python 3.11, Flask, Flask-SQLAlchemy, Flask-Migrate, Flask-CORS, pytest |
+| Area            | Planned technologies                                                            |
+| --------------- | ------------------------------------------------------------------------------- |
+| SUT frontend    | React, Vite, TypeScript, Axios, React Router, Ant Design                        |
+| SUT backend     | Python 3.11, Flask, Flask-SQLAlchemy, Flask-Migrate, Flask-CORS, pytest         |
 | Plugin frontend | React, Vite, TypeScript, Axios, React Router, Ant Design; ECharts when required |
-| Plugin backend | Python 3.11, Flask, SQLAlchemy, Pydantic/JSON Schema, pytest |
-| Test execution | pytest, HTTPX/requests, Playwright for Python, JSON Schema, JUnit XML |
-| Quality | Ruff, mypy, ESLint, Prettier, TypeScript, coverage |
+| Plugin backend  | Python 3.11, Flask, SQLAlchemy, Pydantic/JSON Schema, pytest                    |
+| Test execution  | pytest, HTTPX/requests, Playwright for Python, JSON Schema, JUnit XML           |
+| Quality         | Ruff, mypy, ESLint, Prettier, TypeScript, coverage                              |
 
-Package manifests and tool configuration are introduced in Phase 1 without installing dependencies or implementing business behavior.
+Phase 1 supplemental acceptance installs the declared dependencies locally, records the npm lockfile, and validates the foundation shells without implementing business behavior.
 
 ## Current phase
 
-**Phase 1 — repository structure, environment configuration, and engineering foundation.**
+**Phase 1 鈥?repository structure, environment configuration, and engineering foundation.**
 
 Phase 0 established the approved contract and architecture. Phase 1 adds repository layout, tooling manifests, minimal non-business frontend shells, development checks, and contributor/decision documentation. Registration, Flask routes, databases, PRD analysis, providers, executors, evidence, bugs, reports, and production UI remain unimplemented.
 
@@ -113,7 +113,7 @@ Neither script installs, deletes, repairs, or prints environment-variable values
 
 `.env.example` is a versioned list of safe placeholders. A real `.env`, when explicitly needed in a later phase, is created locally and remains ignored. API keys must come only from the environment; never commit, echo, paste into command history, store in a database, or include them in logs, screenshots, evidence, or reports.
 
-The planned SUT authentication mechanism is a server-side opaque session delivered through an `HttpOnly`, `SameSite=Lax` cookie—not JWT. Uploaded PRDs and model output are untrusted. Future executors will use allowlisted targets and protocol-enumerated operations; arbitrary model-authored code is forbidden.
+The planned SUT authentication mechanism is a server-side opaque session delivered through an `HttpOnly`, `SameSite=Lax` cookie鈥攏ot JWT. Uploaded PRDs and model output are untrusted. Future executors will use allowlisted targets and protocol-enumerated operations; arbitrary model-authored code is forbidden.
 
 ## API and UI testing targets
 

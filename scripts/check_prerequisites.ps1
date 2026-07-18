@@ -120,31 +120,46 @@ if (Test-Path -LiteralPath $dotEnvPath) {
     Write-Check -Status "PASS" -Name ".env" -Message "No local .env exists; .env.example remains the safe template."
 }
 
-$prohibitedDirectories = @("node_modules", ".venv", "venv", "__pycache__")
-$unexpectedDirectories = @(
+$generatedDirectoryNames = @("node_modules", ".venv", "venv", "__pycache__")
+$generatedDirectories = @(
     Get-ChildItem -LiteralPath $projectRoot -Recurse -Force -Directory -ErrorAction Stop |
         Where-Object {
-            -not $_.FullName.Contains("\.git\") -and $_.Name -in $prohibitedDirectories
+            -not $_.FullName.Contains("\.git\") -and $_.Name -in $generatedDirectoryNames
         }
 )
-if ($unexpectedDirectories.Count -eq 0) {
-    Write-Check -Status "PASS" -Name "Generated directories" -Message "No node_modules, virtual environment, or Python cache directory exists."
-} else {
-    Write-Check -Status "FAIL" -Name "Generated directories" -Message ("Unexpected directories: {0}" -f (($unexpectedDirectories.FullName | ForEach-Object { [IO.Path]::GetRelativePath($projectRoot, $_) }) -join ", "))
+$unsafeGeneratedDirectories = @()
+foreach ($directory in $generatedDirectories) {
+    $relativePath = $directory.FullName.Substring($projectRoot.Length + 1).Replace("\", "/")
+    & git -C $projectRoot check-ignore --quiet -- $relativePath
+    $ignored = $LASTEXITCODE -eq 0
+    $tracked = @(& git -C $projectRoot ls-files -- $relativePath).Count -gt 0
+    if (-not $ignored -or $tracked) {
+        $unsafeGeneratedDirectories += $relativePath
+    }
 }
+Write-Check -Status $(if ($unsafeGeneratedDirectories.Count -eq 0) { "PASS" } else { "FAIL" }) -Name "Generated directories" -Message $(if ($unsafeGeneratedDirectories.Count -eq 0) { "Installed dependencies, virtual environments, and caches are ignored and untracked." } else { "Unsafe generated directories: $($unsafeGeneratedDirectories -join ', ')" })
 
-$unexpectedFiles = @(
+$runtimeFiles = @(
     Get-ChildItem -LiteralPath $projectRoot -Recurse -Force -File -ErrorAction Stop |
         Where-Object {
             -not $_.FullName.Contains("\.git\") -and $_.Extension -in @(".db", ".sqlite", ".sqlite3", ".log")
         }
 )
-if ($unexpectedFiles.Count -eq 0) {
-    Write-Check -Status "PASS" -Name "Runtime files" -Message "No database or runtime log file exists."
-} else {
-    Write-Check -Status "FAIL" -Name "Runtime files" -Message ("Unexpected runtime files: {0}" -f (($unexpectedFiles.FullName | ForEach-Object { [IO.Path]::GetRelativePath($projectRoot, $_) }) -join ", "))
+$unsafeRuntimeFiles = @()
+foreach ($file in $runtimeFiles) {
+    $relativePath = $file.FullName.Substring($projectRoot.Length + 1).Replace("\", "/")
+    & git -C $projectRoot check-ignore --quiet -- $relativePath
+    $ignored = $LASTEXITCODE -eq 0
+    $tracked = @(& git -C $projectRoot ls-files -- $relativePath).Count -gt 0
+    if (-not $ignored -or $tracked) {
+        $unsafeRuntimeFiles += $relativePath
+    }
 }
-
+if ($unsafeRuntimeFiles.Count -eq 0) {
+    Write-Check -Status "PASS" -Name "Runtime files" -Message "Database and runtime-log files are absent or safely ignored and untracked."
+} else {
+    Write-Check -Status "FAIL" -Name "Runtime files" -Message ("Unsafe runtime files: {0}" -f ($unsafeRuntimeFiles -join ", "))
+}
 if ($script:HasFailure) {
     Write-Output "Prerequisite result: FAIL"
     exit 1

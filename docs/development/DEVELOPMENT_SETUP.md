@@ -53,16 +53,16 @@ npm run dev --workspace @ai-testpilot/sut-frontend
 npm run dev --workspace @ai-testpilot/plugin-frontend
 ```
 
-These commands will work only after an authorized dependency installation.
+These commands were validated during the authorized Phase 1 supplemental toolchain acceptance.
 
 ## Planned service topology
 
-| Service | Planned loopback address | Current Phase 1 state |
-|---|---|---|
-| SUT frontend | `http://127.0.0.1:5173` | Foundation shell only; not started |
-| SUT backend | `http://127.0.0.1:5001` | Directory boundary only |
-| Plugin frontend | `http://127.0.0.1:5174` | Foundation shell only; not started |
-| Plugin backend | `http://127.0.0.1:5002` | Directory boundary only |
+| Service         | Planned loopback address | Current Phase 1 state              |
+| --------------- | ------------------------ | ---------------------------------- |
+| SUT frontend    | `http://127.0.0.1:5173`  | Foundation shell only; not started |
+| SUT backend     | `http://127.0.0.1:5001`  | Directory boundary only            |
+| Plugin frontend | `http://127.0.0.1:5174`  | Foundation shell only; not started |
+| Plugin backend  | `http://127.0.0.1:5002`  | Directory boundary only            |
 
 Later launch documentation must start each service explicitly, report health, and stop cleanly without changing global configuration.
 
@@ -70,7 +70,7 @@ Later launch documentation must start each service explicitly, report health, an
 
 `.env.example` is committed and contains names plus safe placeholders. A real `.env` is local, ignored, and created only when a later phase needs it. Never copy an `.env` from another project or V1/V2.
 
-Do not put a real key in a command argument, shell assignment, pasted transcript, or command history. Enter secrets through a trusted local editor or an approved secret-input mechanism that does not echo/store the value, then verify only that the variable exists—never print it. The DeepSeek API Key must not appear in Git, logs, databases, screenshots, evidence, reports, or test fixtures.
+Do not put a real key in a command argument, shell assignment, pasted transcript, or command history. Enter secrets through a trusted local editor or an approved secret-input mechanism that does not echo/store the value, then verify only that the variable exists鈥攏ever print it. The DeepSeek API Key must not appear in Git, logs, databases, screenshots, evidence, reports, or test fixtures.
 
 If `.env` already exists, scripts may check only its existence and Git-ignore status. They must not read it.
 
@@ -116,16 +116,16 @@ The protected username defect remains in place through its designated pre-fix ph
 
 ## Common issues
 
-| Symptom | Safe response |
-|---|---|
-| Python is not 3.11 | Report the mismatch; select an existing 3.11 interpreter later without changing global/Conda environments |
-| Node/npm outside declared range | Report it; do not self-upgrade or install globally |
-| Browser not on PATH | Informational in Phase 1; later validate a project-local Playwright browser after authorization |
-| `.env` exists | Do not open it; confirm Git ignores it and never stage it |
-| `node_modules` or `.venv` appears | Treat Phase 1 verification as failed; investigate without deleting user data automatically |
-| PowerShell script is blocked | Use the documented process-scoped invocation or ask the user; do not change machine policy |
-| npm/pip needs network | Stop and request authorization with directory, packages, outputs, validation, and environment impact |
-| Git line-ending warning | Verify `.gitattributes` and `git diff --check`; do not rewrite unrelated files |
+| Symptom                           | Safe response                                                                                                           |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Python is not 3.11                | Report the mismatch; select an existing 3.11 interpreter later without changing global/Conda environments               |
+| Node/npm outside declared range   | Report it; do not self-upgrade or install globally                                                                      |
+| Browser not on PATH               | Informational in Phase 1; later validate a project-local Playwright browser after authorization                         |
+| `.env` exists                     | Do not open it; confirm Git ignores it and never stage it                                                               |
+| `node_modules` or `.venv` appears | Confirm it is project-local, ignored, and untracked; investigate any exception without deleting user data automatically |
+| PowerShell script is blocked      | Use the documented process-scoped invocation or ask the user; do not change machine policy                              |
+| npm/pip needs network             | Stop and request authorization with directory, packages, outputs, validation, and environment impact                    |
+| Git line-ending warning           | Verify `.gitattributes` and `git diff --check`; do not rewrite unrelated files                                          |
 
 ## Security boundary
 

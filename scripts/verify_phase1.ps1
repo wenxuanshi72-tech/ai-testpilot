@@ -1,5 +1,7 @@
 [CmdletBinding()]
-param()
+param(
+    [switch]$Toolchain
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -25,6 +27,22 @@ function Add-Result {
     }
 }
 
+function Invoke-CheckedCommand {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Name,
+
+        [Parameter(Mandatory)]
+        [string]$FilePath,
+
+        [string[]]$Arguments = @()
+    )
+
+    Write-Output ("--- {0} ---" -f $Name)
+    & $FilePath @Arguments
+    $exitCode = $LASTEXITCODE
+    Add-Result -Passed ($exitCode -eq 0) -Name $Name -Message ("Exit code: {0}" -f $exitCode)
+}
 $projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 $phase0Commit = "62330a2be3949fde13fa310377c14144fa633b2f"
 
@@ -46,10 +64,10 @@ Add-Result -Passed ($missingDirectories.Count -eq 0) -Name "Required directories
 
 $requiredFiles = @(
     "AGENTS.md", ".env.example", ".gitignore", ".editorconfig", ".gitattributes", ".prettierignore",
-    "README.md", "package.json", "pyproject.toml", "tsconfig.base.json", "eslint.config.mjs", "prettier.config.mjs",
+    "README.md", "package.json", "package-lock.json", "pyproject.toml", "tsconfig.base.json", "eslint.config.mjs", "prettier.config.mjs",
     "sut/backend/README.md", "sut/frontend/package.json", "sut/frontend/tsconfig.json", "sut/frontend/vite.config.ts", "sut/frontend/vitest.config.ts", "sut/frontend/index.html", "sut/frontend/src/main.tsx", "sut/frontend/src/App.tsx",
     "plugin/backend/README.md", "plugin/frontend/package.json", "plugin/frontend/tsconfig.json", "plugin/frontend/vite.config.ts", "plugin/frontend/vitest.config.ts", "plugin/frontend/index.html", "plugin/frontend/src/main.tsx", "plugin/frontend/src/App.tsx",
-    "scripts/check_prerequisites.ps1", "scripts/verify_phase1.ps1",
+    "scripts/check_prerequisites.ps1", "scripts/verify_phase1.ps1", "tests/test_foundation.py",
     "docs/PROJECT_CONTRACT.md", "docs/ROADMAP.md", "docs/architecture/SYSTEM_ARCHITECTURE.md", "docs/architecture/DATABASE_DESIGN.md", "docs/architecture/API_BOUNDARIES.md", "docs/architecture/SECURITY_AND_PRIVACY.md", "docs/testing/ACCEPTANCE_STRATEGY.md",
     "docs/development/DEVELOPMENT_SETUP.md", "docs/development/CONTRIBUTING.md",
     "docs/decisions/ADR-001-LOCAL-FIRST-MODULAR-MONOLITH.md", "docs/decisions/ADR-002-DETERMINISTIC-TEST-ORACLE.md", "docs/decisions/ADR-003-REAL-AND-MOCK-PROVIDER-SEPARATION.md"
@@ -101,22 +119,46 @@ Add-Result -Passed (-not $dotEnvTracked -and $dotEnvIgnored) -Name ".env safety"
 $templateTracked = $null -ne (& git -C $projectRoot ls-files -- .env.example)
 Add-Result -Passed $templateTracked -Name ".env.example" -Message "The safe environment template remains tracked."
 
-$unexpectedDirectories = @(
+$generatedDirectoryNames = @("node_modules", ".venv", "venv", "__pycache__")
+$generatedDirectories = @(
     Get-ChildItem -LiteralPath $projectRoot -Recurse -Force -Directory |
         Where-Object {
-            -not $_.FullName.Contains("\.git\") -and $_.Name -in @("node_modules", ".venv", "venv", "__pycache__")
+            -not $_.FullName.Contains("\.git\") -and $_.Name -in $generatedDirectoryNames
         }
 )
-Add-Result -Passed ($unexpectedDirectories.Count -eq 0) -Name "Generated directories" -Message $(if ($unexpectedDirectories.Count -eq 0) { "No dependency, virtual-environment, or Python-cache directories exist." } else { "Unexpected generated directories exist." })
+$unsafeGeneratedDirectories = @()
+foreach ($directory in $generatedDirectories) {
+    $relativePath = $directory.FullName.Substring($projectRoot.Length + 1).Replace("\", "/")
+    & git -C $projectRoot check-ignore --quiet -- $relativePath
+    $ignored = $LASTEXITCODE -eq 0
+    $tracked = @(& git -C $projectRoot ls-files -- $relativePath).Count -gt 0
+    if (-not $ignored -or $tracked) {
+        $unsafeGeneratedDirectories += $relativePath
+    }
+}
+Add-Result -Passed ($unsafeGeneratedDirectories.Count -eq 0) -Name "Generated directories" -Message $(if ($unsafeGeneratedDirectories.Count -eq 0) { "Installed dependencies, virtual environments, and caches are ignored and untracked." } else { "Unsafe generated directories: $($unsafeGeneratedDirectories -join ', ')" })
 
-$unexpectedRuntimeFiles = @(
+$nodeModulesPath = Join-Path $projectRoot "node_modules"
+$venvPythonPath = Join-Path $projectRoot ".venv/Scripts/python.exe"
+$toolchainInstalled = (Test-Path -LiteralPath $nodeModulesPath -PathType Container) -and (Test-Path -LiteralPath $venvPythonPath -PathType Leaf)
+Add-Result -Passed $toolchainInstalled -Name "Installed toolchain" -Message $(if ($toolchainInstalled) { "Node dependencies and the Python virtual environment are installed locally." } else { "node_modules or .venv/Scripts/python.exe is missing." })
+$runtimeFiles = @(
     Get-ChildItem -LiteralPath $projectRoot -Recurse -Force -File |
         Where-Object {
             -not $_.FullName.Contains("\.git\") -and $_.Extension -in @(".db", ".sqlite", ".sqlite3", ".log")
         }
 )
-Add-Result -Passed ($unexpectedRuntimeFiles.Count -eq 0) -Name "Runtime artifacts" -Message $(if ($unexpectedRuntimeFiles.Count -eq 0) { "No database or runtime log exists." } else { "Database or runtime log files exist." })
-
+$unsafeRuntimeFiles = @()
+foreach ($file in $runtimeFiles) {
+    $relativePath = $file.FullName.Substring($projectRoot.Length + 1).Replace("\", "/")
+    & git -C $projectRoot check-ignore --quiet -- $relativePath
+    $ignored = $LASTEXITCODE -eq 0
+    $tracked = @(& git -C $projectRoot ls-files -- $relativePath).Count -gt 0
+    if (-not $ignored -or $tracked) {
+        $unsafeRuntimeFiles += $relativePath
+    }
+}
+Add-Result -Passed ($unsafeRuntimeFiles.Count -eq 0) -Name "Runtime artifacts" -Message $(if ($unsafeRuntimeFiles.Count -eq 0) { "Database and runtime-log files are absent or safely ignored and untracked." } else { "Unsafe runtime files: $($unsafeRuntimeFiles -join ', ')" })
 $artifactViolations = @(
     Get-ChildItem -LiteralPath (Join-Path $projectRoot "artifacts") -Recurse -Force -File |
         Where-Object { $_.Name -notin @(".gitkeep", "README.md") }
@@ -182,8 +224,31 @@ foreach ($jsonPath in @("package.json", "sut/frontend/package.json", "plugin/fro
     }
 }
 
+& node -e "JSON.parse(require('fs').readFileSync('package-lock.json', 'utf8'))" 2>$null
+Add-Result -Passed ($LASTEXITCODE -eq 0) -Name "JSON: package-lock.json" -Message "Valid npm lockfile JSON."
 & python -c "import pathlib,tomllib; tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8'))" 2>$null
 Add-Result -Passed ($LASTEXITCODE -eq 0) -Name "pyproject.toml" -Message "Python 3.11 parsed the TOML configuration."
+
+if ($Toolchain) {
+    $npmPath = (Get-Command npm -ErrorAction Stop).Source
+    $ruffPath = Join-Path $projectRoot ".venv/Scripts/ruff.exe"
+    $mypyPath = Join-Path $projectRoot ".venv/Scripts/mypy.exe"
+    $pytestPath = Join-Path $projectRoot ".venv/Scripts/pytest.exe"
+
+    Invoke-CheckedCommand -Name "Prettier" -FilePath $npmPath -Arguments @("run", "format:check")
+    Invoke-CheckedCommand -Name "ESLint" -FilePath $npmPath -Arguments @("run", "lint")
+    Invoke-CheckedCommand -Name "TypeScript" -FilePath $npmPath -Arguments @("run", "typecheck")
+    Invoke-CheckedCommand -Name "Vitest" -FilePath $npmPath -Arguments @("run", "test")
+    Invoke-CheckedCommand -Name "Vite build" -FilePath $npmPath -Arguments @("run", "build")
+    Invoke-CheckedCommand -Name "Ruff format" -FilePath $ruffPath -Arguments @("format", "--check", ".")
+    Invoke-CheckedCommand -Name "Ruff lint" -FilePath $ruffPath -Arguments @("check", ".")
+    Invoke-CheckedCommand -Name "mypy" -FilePath $mypyPath -Arguments @("tests")
+    Invoke-CheckedCommand -Name "pytest coverage" -FilePath $pytestPath -Arguments @("--cov=tests", "--cov-report=term-missing", "--cov-fail-under=80")
+
+    $buildOutputs = @("sut/frontend/dist/index.html", "plugin/frontend/dist/index.html")
+    $missingBuildOutputs = @($buildOutputs | Where-Object { -not (Test-Path -LiteralPath (Join-Path $projectRoot $_) -PathType Leaf) })
+    Add-Result -Passed ($missingBuildOutputs.Count -eq 0) -Name "Build outputs" -Message $(if ($missingBuildOutputs.Count -eq 0) { "Both frontend production builds generated index.html." } else { "Missing: $($missingBuildOutputs -join ', ')" })
+}
 
 $remoteOutput = @(& git -C $projectRoot remote -v)
 Add-Result -Passed ($LASTEXITCODE -eq 0) -Name "Git remotes" -Message ("Read-only check completed; configured entries: {0}." -f $remoteOutput.Count)

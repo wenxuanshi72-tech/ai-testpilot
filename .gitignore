@@ -15,6 +15,10 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.egg-info/
 *.py[cod]
 
 # Local databases and Flask instance data

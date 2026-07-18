@@ -1,0 +1,60 @@
+# Secrets and local environment (keep the safe template)
+.env
+.env.*
+!.env.example
+
+# JavaScript dependencies and build output
+node_modules/
+dist/
+coverage/
+
+# Python environments, caches, and bytecode
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.py[cod]
+
+# Local databases and Flask instance data
+*.db
+*.sqlite
+*.sqlite3
+instance/
+
+# Playwright and test runtime artifacts
+playwright-report/
+test-results/
+blob-report/
+traces/
+videos/
+
+# Generated local evidence, reports, and logs
+artifacts/evidence/
+artifacts/reports/
+evidence/
+reports/generated/
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.swp
+*.swo
+*~
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local IDE state
+.idea/
+.vscode/
+*.code-workspace
+
+# Intentionally versioned: docs/, schemas/, prompts/, test-specs/,
+# sample data, report templates, and .env.example.

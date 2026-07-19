@@ -19,6 +19,7 @@ sut-backend = [
 plugin-backend = [
   "Flask>=3.1,<4",
   "Flask-Cors>=5,<7",
+  "httpx>=0.28,<1",
   "SQLAlchemy>=2.0,<3",
   "jsonschema>=4.23,<5",
   "pydantic>=2.11,<3",
@@ -39,13 +40,20 @@ quality = [
 packages = []
 
 [tool.pytest.ini_options]
-addopts = ["--strict-config", "--strict-markers", "-ra", "-m", "not black_box"]
+addopts = [
+  "--strict-config",
+  "--strict-markers",
+  "-ra",
+  "-m",
+  "not black_box and not real_llm",
+]
 minversion = "8.3"
 testpaths = ["tests", "sut/backend/tests", "plugin/backend/tests"]
 xfail_strict = true
 markers = [
   "black_box: requires a separately running SUT and uses only its public HTTP API",
   "known_defect: formal requirement test for a reviewed known product defect",
+  "real_llm: incurs an explicitly confirmed paid real-provider network call",
 ]
 
 [tool.coverage.run]

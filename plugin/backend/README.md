@@ -1,5 +1,17 @@
-# Plugin Backend Boundary
+# Plugin backend
 
-This directory is reserved for the Python 3.11/Flask AI TestPilot backend. Phase 1 contains no provider adapter, PRD analysis, persistence, execution, evidence, bug, or reporting implementation. Shared dependency groups and quality configuration live in the root `pyproject.toml`.
+Phase 5A implements the local Flask API for project/PRD persistence and attributable,
+schema-validated PRD requirement analysis. It owns `plugin.db` and never reads `sut.db`.
 
-Later modules must follow the approved domain/adapter boundaries and cannot give AI authority over deterministic test verdicts.
+Run migrations and the local API from the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe -m plugin.backend.migrate
+.\.venv\Scripts\python.exe -m plugin.backend.wsgi
+```
+
+Real calls require `DEEPSEEK_API_KEY` in the process environment and explicit
+`provider_mode=real`. There is no real-to-mock fallback.
+Saved real candidates can be revalidated without a provider only through the audited
+`OfflineRevalidationService`. It preserves failed real runs, records validator provenance and zero
+LLM calls, and promotes requirements only after complete deterministic validation succeeds.

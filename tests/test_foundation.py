@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import tomllib
 from pathlib import Path
 
@@ -25,9 +26,24 @@ def test_python_configuration_targets_version_311() -> None:
     assert configuration["tool"]["mypy"]["python_version"] == "3.11"
 
 
-def test_safe_environment_template_is_versioned_without_real_environment() -> None:
+def test_safe_environment_template_and_local_environment_git_hygiene() -> None:
     assert (ROOT / ".env.example").is_file()
-    assert not (ROOT / ".env").exists()
+    local_environment = ROOT / ".env"
+    if local_environment.exists():
+        ignored = subprocess.run(
+            ["git", "check-ignore", "-q", "--", ".env"],
+            cwd=ROOT,
+            check=False,
+        )
+        tracked = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", "--", ".env"],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert ignored.returncode == 0
+        assert tracked.returncode != 0
 
 
 def test_frontend_shells_remain_non_business_boundaries() -> None:

@@ -63,13 +63,21 @@ Mock mode is limited to unit, offline, fault-injection, and stable regression te
 | Test execution  | pytest, HTTPX/requests, Playwright for Python, JSON Schema, JUnit XML           |
 | Quality         | Ruff, mypy, ESLint, Prettier, TypeScript, coverage                              |
 
-Phase 1 established the verified toolchain, Phase 2 implemented the Flask authentication backend, Phase 3 proved its public API, and Phase 4 implements the accessible React authentication experience.
+Phase 1 established the verified toolchain, Phase 2 implemented the Flask authentication backend,
+Phase 3 proved its public API, and Phase 4 implemented the accessible React authentication
+experience. Phase 5A now implements the Plugin PRD analysis backend; its real-provider acceptance
+remains pending until an explicitly confirmed paid DeepSeek call succeeds.
 
 ## Current phase
 
-**Phase 4 — accessible React SUT authentication frontend and live backend integration.**
+**Phase 5A — reliable real-provider PRD requirement analysis.**
 
-The SUT now provides responsive registration, login, session restoration, protected profile, logout, and 404 routes through a typed credentialed Axios client. Component tests and real Vite/Flask integration preserve BUG-AUTH-001: the UI intentionally permits z1234 to reach the defective backend. Plugin business behavior, AI providers, execution engines, formal bug/report artifacts, and later workflows remain unimplemented.
+The Plugin backend now supports project creation, PRD versioning, bounded structured requirement
+analysis, strict real/Mock provenance, local Schema/domain validation, resumable batches, audit
+metadata, and atomic requirement promotion. Offline validation is complete. The real DeepSeek
+acceptance, real plugin.db evidence, and phase commit remain pending explicit paid-call approval.
+Test generation, execution engines, formal bug/report artifacts, Plugin business UI, and Phase 5B
+remain unimplemented.
 
 ## Repository map
 

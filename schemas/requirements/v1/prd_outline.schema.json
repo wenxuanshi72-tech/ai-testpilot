@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-testpilot.local/schemas/requirements/v1/prd_outline.schema.json",
+  "title": "PRD outline",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["document_summary", "sections", "outline_complete"],
+  "properties": {
+    "document_summary": { "type": "string", "minLength": 1, "maxLength": 2000 },
+    "sections": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["section_id", "title", "source_heading"],
+        "properties": {
+          "section_id": {
+            "type": "string",
+            "pattern": "^SEC-[A-Za-z0-9_-]{1,64}$"
+          },
+          "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "source_heading": { "type": "string", "minLength": 1, "maxLength": 300 }
+        }
+      }
+    },
+    "outline_complete": { "const": true }
+  }
+}

@@ -12,3 +12,5 @@ docs/design/DESIGN_DIRECTION.md
 docs/PROJECT_CONTRACT.md
 docs/ROADMAP.md
 docs/testing/ACCEPTANCE_STRATEGY.md
+# Immutable historical prompt; its database-registered content hash must not drift.
+prompts/prd-analysis/v1/requirements_recovery_system.md

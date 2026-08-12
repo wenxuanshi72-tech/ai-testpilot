@@ -598,6 +598,42 @@ def test_call_and_cost_budgets_are_not_provider_errors(
         zero_cost_service._check_call_budget(result.run_id, "TGB-API-001", 0, RunCallCounters())
 
 
+def test_run_budget_excludes_historical_run_cost(
+    formal_database: PluginDatabase,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = GenerationService(formal_database, max_run_cost_usd="0.25")
+    historical = service.start(PROJECT_ID, MockLLMProvider(), "historical-cost")
+    current = service.start(PROJECT_ID, MockLLMProvider(), "current-cost")
+    original_fetch_one = formal_database.fetch_one
+    observed: list[dict[str, object]] = []
+
+    def scoped_fetch(
+        statement: str, values: dict[str, object] | None = None
+    ) -> dict[str, object] | None:
+        if "SELECT actual_cost_microusd FROM test_generation_runs" in statement:
+            observed.append(dict(values or {}))
+            return {"actual_cost_microusd": 0}
+        return original_fetch_one(statement, values)
+
+    monkeypatch.setattr(formal_database, "fetch_one", scoped_fetch)
+    service._check_call_budget(current.run_id, "TGB-API-001", 0, RunCallCounters())
+    assert observed == [{"run": current.run_id}]
+    assert historical.run_id != current.run_id
+
+    def exhausted_fetch(
+        statement: str, values: dict[str, object] | None = None
+    ) -> dict[str, object] | None:
+        if "SELECT actual_cost_microusd FROM test_generation_runs" in statement:
+            assert values == {"run": current.run_id}
+            return {"actual_cost_microusd": 250000}
+        return original_fetch_one(statement, values)
+
+    monkeypatch.setattr(formal_database, "fetch_one", exhausted_fetch)
+    with pytest.raises(GenerationError, match="BUDGET_EXCEEDED"):
+        service._check_call_budget(current.run_id, "TGB-API-001", 0, RunCallCounters())
+
+
 def test_run_correction_budget_blocks_ninth_batch(
     formal_database: PluginDatabase,
 ) -> None:

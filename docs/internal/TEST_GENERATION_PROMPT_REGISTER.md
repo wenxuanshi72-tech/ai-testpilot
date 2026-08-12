@@ -8,11 +8,11 @@
 - Intent Schema hash: `44058ea133f732a54a8c1b6e68dbbe84743cb473d613730fc558e3eb65efa657`
 - Candidate Schema: `test-cases@1.8.0`
 - Candidate Schema hash: `2261d9996b5bada0e95f6bbf58a6443b05373d99ec05fdc8d0f81272e82437d1`
-- Compiler: `deterministic-candidate-compiler@2.28.0`
+- Compiler: `deterministic-candidate-compiler@2.29.0`
 - Compiler file SHA-256: `964cbdca256b942a81a60106dd3c6783a74073e7b351408f0888ff92dcadbf3c`
 - Provider/model: explicit DeepSeek Real / `deepseek-v4-pro`, or explicit Mock for offline tests
 - Compatibility policy: `authorization` is accepted and deterministically compiled as `security`; `functional` is preserved as the independent candidate category `functional`; `test_data[].value` accepts string or `null`; canonical and descriptive API session semantics, missing request bodies, empty semantic values, and structured or action/instruction setup requests are normalized deterministically with field-level audit; API-only fields are not injected into UI or Manual intents.
-- Compatibility audit: the parsed artifact retains the model value, while `intent_batch_compiled` records the slot, field, rule, original type/value category, accepted category/type, and `test-intent-compatibility@1.27.0`.
+- Compatibility audit: the parsed artifact retains the model value, while `intent_batch_compiled` records the slot, field, rule, original type/value category, accepted category/type, and `test-intent-compatibility@1.28.0`.
 
 API, UI, and Manual prompts each contain one complete legal semantic example. The only identifier the model may return is an allowed `generation_slot_id`; requirement IDs, case/type IDs, run/batch metadata, states, timestamps, hashes, links, and audit fields are forbidden. Corrections replace the complete same-batch Intent response and receive only an exact redacted error.
 

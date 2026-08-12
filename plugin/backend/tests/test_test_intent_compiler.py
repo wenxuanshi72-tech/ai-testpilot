@@ -92,7 +92,7 @@ def test_compatibility_accepts_authorization_and_nullable_test_data_with_audit()
             "original": "authorization",
             "accepted_as": "security",
             "rule": "authorization_to_security",
-            "compatibility_version": "test-intent-compatibility@1.27.0",
+            "compatibility_version": "test-intent-compatibility@1.28.0",
         },
         {
             "generation_slot_id": intent["generation_slot_id"],
@@ -100,7 +100,7 @@ def test_compatibility_accepts_authorization_and_nullable_test_data_with_audit()
             "original_type": "null",
             "accepted_type": "null",
             "rule": "nullable_test_data_value",
-            "compatibility_version": "test-intent-compatibility@1.27.0",
+            "compatibility_version": "test-intent-compatibility@1.28.0",
         },
     ]
 
@@ -120,7 +120,7 @@ def test_functional_scenario_is_preserved_as_candidate_category() -> None:
             "original": "functional",
             "accepted_as": "functional",
             "rule": "functional_category_passthrough",
-            "compatibility_version": "test-intent-compatibility@1.27.0",
+            "compatibility_version": "test-intent-compatibility@1.28.0",
         }
     ]
 
@@ -151,7 +151,7 @@ def test_session_semantics_aliases_compile_to_anonymous_with_audit() -> None:
                 "original": alias,
                 "accepted_as": "anonymous",
                 "rule": "descriptive_session_to_canonical",
-                "compatibility_version": "test-intent-compatibility@1.27.0",
+                "compatibility_version": "test-intent-compatibility@1.28.0",
             }
         ]
 
@@ -304,7 +304,7 @@ def test_missing_cleanup_is_normalized_to_audited_no_cleanup() -> None:
             "original_type": "missing",
             "accepted_type": "no_cleanup",
             "rule": "missing_cleanup_to_no_cleanup",
-            "compatibility_version": "test-intent-compatibility@1.27.0",
+            "compatibility_version": "test-intent-compatibility@1.28.0",
         }
     ]
 
@@ -326,7 +326,7 @@ def test_quality_scenario_is_normalized_to_audited_functional() -> None:
             "original": "quality",
             "accepted_as": "functional",
             "rule": "model_functional_alias_to_functional",
-            "compatibility_version": "test-intent-compatibility@1.27.0",
+            "compatibility_version": "test-intent-compatibility@1.28.0",
         }
     ]
 
@@ -376,7 +376,7 @@ def test_model_functional_aliases_are_audited(alias: str) -> None:
             "original": alias,
             "accepted_as": "functional",
             "rule": "model_functional_alias_to_functional",
-            "compatibility_version": "test-intent-compatibility@1.27.0",
+            "compatibility_version": "test-intent-compatibility@1.28.0",
         }
     ]
 
@@ -653,13 +653,53 @@ def test_ui_route_wildcard_becomes_root_route() -> None:
 
 @pytest.mark.parametrize(
     ("route", "expected"),
-    [("/*", "/"), ("/register/*", "/register/"), ("/register", "/register")],
+    [
+        ("", "/"),
+        ("   ", "/"),
+        ("/*", "/"),
+        ("/register/*", "/register/"),
+        ("/register", "/register"),
+    ],
 )
 def test_ui_route_normalization(route: str, expected: str) -> None:
     raw = _example("ui")
     raw["type_intent"]["route"] = route
     normalized = normalize_intent_batch({"intents": [raw]})
     assert normalized["intents"][0]["type_intent"]["route"] == expected
+
+
+def test_empty_ui_route_has_safe_compatibility_audit() -> None:
+    raw = _example("ui")
+    raw["type_intent"]["route"] = "   "
+    record = next(
+        item
+        for item in compatibility_audit_records([raw])
+        if item["rule"] == "empty_ui_route_to_root"
+    )
+    assert record["source_summary"] == "empty"
+    assert record["accepted_as"] == "/"
+    assert "   " not in json.dumps(record)
+
+
+def test_invalid_nonempty_ui_route_is_not_silently_rewritten() -> None:
+    raw = _example("ui")
+    raw["type_intent"]["route"] = "not-a-rooted-route"
+    normalized = normalize_intent_batch({"intents": [raw]})
+    accepted = normalized["intents"][0]
+    assert accepted["type_intent"]["route"] == "not-a-rooted-route"
+    with pytest.raises(ValidationError):
+        DeterministicCandidateCompiler().compile(accepted, _context("ui", accepted))
+
+
+def test_ui_route_rule_does_not_modify_api_or_manual_intents() -> None:
+    api = _example("api")
+    api["type_intent"]["route"] = ""
+    manual = _example("manual")
+    manual["type_intent"]["route"] = ""
+    normalized = normalize_intent_batch({"intents": [api, manual]})["intents"]
+    assert normalized[0]["type_intent"]["route"] == ""
+    assert normalized[0]["type_intent"]["path"] != "/"
+    assert normalized[1]["type_intent"]["route"] == ""
 
 
 def test_ui_002_shape_replays_through_candidate_schema() -> None:
@@ -731,11 +771,11 @@ def test_unknown_viewport_and_multi_route_are_reviewable() -> None:
     normalized = normalize_intent_batch({"intents": [raw]})
     accepted = normalized["intents"][0]
     assert accepted["type_intent"]["viewport_intent"] == "responsive-matrix"
-    assert accepted["type_intent"]["route"] == ""
+    assert accepted["type_intent"]["route"] == "/"
     TestIntentSchemas().validate("ui_intent_batch.schema.json", normalized)
     rules = {record["rule"] for record in compatibility_audit_records([raw])}
     assert "unknown_viewport_to_responsive_matrix" in rules
-    assert "multi_route_string_to_reviewable_empty_route" in rules
+    assert "multi_route_string_to_reviewable_root_route" in rules
 
 
 def test_inline_test_data_mapping_expands_with_sensitive_classification() -> None:

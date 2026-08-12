@@ -10,7 +10,7 @@ Phase 5B reads the 19 immutable Phase 5A requirements and may produce only a com
 2. Each slot owns `generation_slot_id`, formal requirement links, primary requirement, case type, deterministic case ID, and requirement snapshot. These fields never come from the model.
 3. Explicit Real or isolated Mock returns `test-intent@2.9.0`: the exact slot ID plus semantic test content only. Real never falls back to Mock.
 4. The response boundary rejects missing, duplicate, unknown, or cross-batch slots and any system-owned field.
-5. `deterministic-candidate-compiler@2.28.0` injects IDs, trace/version metadata, draft lifecycle, timestamps, deterministic test-data names, and semantic/full hashes, then validates strict `test-cases@1.8.0`.
+5. `deterministic-candidate-compiler@2.29.0` injects IDs, trace/version metadata, draft lifecycle, timestamps, deterministic test-data names, and semantic/full hashes, then validates strict `test-cases@1.8.0`.
 6. Existing domain, protected-defect, aggregate coverage, duplicate, conflict, and traceability checks run against the complete compiled collection.
 7. Only a fully valid aggregate is saved atomically with links, validation/coverage results, findings, and audit events.
 
@@ -30,7 +30,7 @@ The offline plan contains 46 slots in 17 initial batches (API 7, UI 6, Manual 4)
 - Model-output Schema: `test-intent@2.9.0`
 - Candidate Schema: `test-cases@1.8.0`
 - Planner: `test-generation-capacity-planner@2.0.0`
-- Compiler: `deterministic-candidate-compiler@2.28.0`
+- Compiler: `deterministic-candidate-compiler@2.29.0`
 - Parser: `test-generation-json-parser@1.0.0`
 
 阶段5B产物尚未经过人工审核，不得直接用于正式执行；必须在阶段6批准和冻结后才能成为执行基线。

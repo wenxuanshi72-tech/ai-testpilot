@@ -12,8 +12,8 @@ from plugin.backend.app.providers import ProviderMetadata
 from plugin.backend.app.test_generation_prompts import TEST_GENERATION_PROMPT_VERSION
 from plugin.backend.app.test_generation_schemas import TEST_CASE_SCHEMA_VERSION, TestCaseSchemas
 
-TEST_INTENT_COMPILER_VERSION = "deterministic-candidate-compiler@2.28.0"
-TEST_INTENT_COMPATIBILITY_VERSION = "test-intent-compatibility@1.27.0"
+TEST_INTENT_COMPILER_VERSION = "deterministic-candidate-compiler@2.29.0"
+TEST_INTENT_COMPATIBILITY_VERSION = "test-intent-compatibility@1.28.0"
 SCENARIO_TO_CATEGORY = {
     "positive": "positive",
     "negative": "negative",
@@ -525,8 +525,20 @@ def compatibility_audit_records(intents: list[dict[str, Any]]) -> list[dict[str,
                     "generation_slot_id": slot_id,
                     "field": "type_intent/route",
                     "original": route_value,
-                    "accepted_as": "",
-                    "rule": "multi_route_string_to_reviewable_empty_route",
+                    "accepted_as": "/",
+                    "rule": "multi_route_string_to_reviewable_root_route",
+                    "compatibility_version": TEST_INTENT_COMPATIBILITY_VERSION,
+                }
+            )
+        elif isinstance(route_value, str) and not route_value.strip():
+            records.append(
+                {
+                    "generation_slot_id": slot_id,
+                    "field": "type_intent/route",
+                    "original_type": "str",
+                    "source_summary": "empty",
+                    "accepted_as": "/",
+                    "rule": "empty_ui_route_to_root",
                     "compatibility_version": TEST_INTENT_COMPATIBILITY_VERSION,
                 }
             )
@@ -728,7 +740,8 @@ def normalize_intent_batch(parsed: dict[str, Any]) -> dict[str, Any]:
         details = intent.get("type_intent")
         if not isinstance(details, dict):
             continue
-        if "route" in details:
+        is_ui_intent = "route" in details and "viewport_intent" in details
+        if is_ui_intent:
             if details.get("viewport_intent") not in {
                 "desktop",
                 "tablet",
@@ -747,11 +760,15 @@ def normalize_intent_batch(parsed: dict[str, Any]) -> dict[str, Any]:
                 if details.get(field) is None:
                     details[field] = []
         route = details.get("route")
-        if isinstance(route, str) and "," in route:
-            details["route"] = ""
-        if isinstance(route, str) and route.endswith("*"):
-            details["route"] = route[:-1].rstrip("/") + "/"
-        if "route" in details and details.get("evidence_intent") != "deferred_no_capture":
+        if is_ui_intent and isinstance(route, str):
+            normalized_route = route.strip()
+            if "," in normalized_route or not normalized_route:
+                details["route"] = "/"
+            elif normalized_route.endswith("*"):
+                details["route"] = normalized_route[:-1].rstrip("/") + "/"
+            else:
+                details["route"] = normalized_route
+        if is_ui_intent and details.get("evidence_intent") != "deferred_no_capture":
             details["evidence_intent"] = "deferred_no_capture"
         is_api_intent = any(
             field in details

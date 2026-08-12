@@ -142,7 +142,7 @@ def test_resume_dry_run_counts_only_compatible_unfinished_real_batches(
     ]
 
 
-def test_dry_run_does_not_count_different_compiler_checkpoint(
+def test_dry_run_revalidates_different_compiler_checkpoint_with_current_compiler(
     formal_database: PluginDatabase,
 ) -> None:
     provider = RealLabeledOfflineProvider(stop_attempt=4)
@@ -169,5 +169,5 @@ def test_dry_run_does_not_count_different_compiler_checkpoint(
         recovery_reason="TEST_INTENT_COMPILER_REDESIGN",
     )
 
-    assert report["reusable_batch_count"] == 0
-    assert report["planned_call_count"] == 13
+    assert report["reusable_batch_count"] == 3
+    assert report["planned_call_count"] == 10

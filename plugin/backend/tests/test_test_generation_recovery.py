@@ -110,15 +110,10 @@ def _replace_checkpoint_parsed(
 @pytest.mark.parametrize(
     ("batch_key", "mutate"),
     [
-        (
-            "TGB-API-001",
-            lambda value: value["intents"][0]["type_intent"].update(
-                {"setup_semantics": [{"method": "POST", "path": "/setup", "expected_status": 201}]}
-            ),
-        ),
-        ("TGB-API-002", lambda value: value["intents"][0].update({"tags": ["CORS"]})),
-        ("TGB-API-004", lambda value: value["intents"][0].update({"scenario_type": "defect"})),
-        ("TGB-API-005", lambda value: value["intents"][0].update({"scenario_type": "error"})),
+        ("TGB-API-001", lambda value: value["intents"][0].pop("actions")),
+        ("TGB-API-002", lambda value: value["intents"][0].pop("expected_outcomes")),
+        ("TGB-API-004", lambda value: value["intents"][0].pop("objective")),
+        ("TGB-API-005", lambda value: value["intents"][0].pop("type_intent")),
     ],
 )
 def test_legacy_checkpoint_is_rejected_and_falls_back_without_correction(
@@ -163,7 +158,7 @@ def test_dry_run_and_runtime_reject_all_legacy_checkpoints(
             formal_database,
             parent.run_id,
             f"TGB-API-{index:03d}",
-            lambda value: value["intents"][0].update({"tags": ["CORS"]}),
+            lambda value: value["intents"][0].pop("actions"),
         )
     report = build_dry_run_report(
         formal_database,
@@ -284,7 +279,7 @@ def test_provider_network_recovery_reason_is_allowed(
     }
 
 
-def test_changed_prompt_hash_forces_regeneration_instead_of_checkpoint_reuse(
+def test_changed_historical_prompt_allows_current_pipeline_revalidation(
     formal_database: PluginDatabase,
     tmp_path: Path,
 ) -> None:
@@ -316,16 +311,16 @@ def test_changed_prompt_hash_forces_regeneration_instead_of_checkpoint_reuse(
         recovery_reason="TEST_INTENT_COMPILER_REDESIGN",
     )
     assert child.status == "validated_pending_review"
-    assert provider.call_count == 13
+    assert provider.call_count == 11
     reused = formal_database.fetch_one(
         "SELECT COUNT(*) AS count FROM test_case_generation_audit_events "
         "WHERE test_generation_run_id=:run AND event_type='validated_batch_reused'",
         {"run": child.run_id},
     )
-    assert reused == {"count": 0}
+    assert reused == {"count": 2}
 
 
-def test_checkpoint_from_different_compiler_version_is_not_reused(
+def test_checkpoint_from_different_compiler_version_is_recompiled_and_reused(
     formal_database: PluginDatabase,
 ) -> None:
     interrupted = StopOnAttemptProvider(stop_attempt=3)
@@ -355,10 +350,74 @@ def test_checkpoint_from_different_compiler_version_is_not_reused(
     )
 
     assert child.status == "validated_pending_review"
-    assert provider.call_count == 13
+    assert provider.call_count == 11
     reused = formal_database.fetch_one(
         "SELECT COUNT(*) AS count FROM test_case_generation_audit_events "
         "WHERE test_generation_run_id=:run AND event_type='validated_batch_reused'",
         {"run": child.run_id},
     )
-    assert reused == {"count": 0}
+    assert reused == {"count": 2}
+
+
+def test_checkpoint_search_walks_to_ancestor_and_prefers_valid_correction(
+    formal_database: PluginDatabase,
+) -> None:
+    ancestor_provider = RealLabeledStopProvider(stop_attempt=3)
+    ancestor = GenerationService(formal_database, max_retries=0).start(
+        PROJECT_ID, ancestor_provider, "ancestor-checkpoint"
+    )
+    middle = GenerationService(formal_database, max_retries=0).start(
+        PROJECT_ID,
+        RealLabeledStopProvider(stop_attempt=1),
+        "middle-without-artifact",
+        resume_run_id=ancestor.run_id,
+        recovery_reason="PROVIDER_NETWORK_RECOVERY",
+    )
+    provider = RealLabeledMockProvider()
+    child = GenerationService(formal_database, max_retries=0).start(
+        PROJECT_ID,
+        provider,
+        "ancestor-child",
+        resume_run_id=middle.run_id,
+        recovery_reason="PROVIDER_NETWORK_RECOVERY",
+    )
+    assert child.status == "validated_pending_review"
+    assert provider.call_count == 11
+    sources = formal_database.fetch_all(
+        "SELECT details_json FROM test_case_generation_audit_events "
+        "WHERE test_generation_run_id=:run AND event_type='validated_batch_reused'",
+        {"run": child.run_id},
+    )
+    assert {json.loads(row["details_json"])["source_run_id"] for row in sources} == {
+        ancestor.run_id
+    }
+
+
+def test_checkpoint_parent_cycle_is_terminal_system_error(
+    formal_database: PluginDatabase,
+) -> None:
+    parent = GenerationService(formal_database, max_retries=0).start(
+        PROJECT_ID, RealLabeledStopProvider(stop_attempt=1), "cycle-parent"
+    )
+    with formal_database.transaction() as connection:
+        connection.exec_driver_sql("DROP TRIGGER IF EXISTS test_generation_runs_terminal_no_update")
+        connection.execute(
+            text(
+                "UPDATE test_generation_runs SET resume_source_run_id=:run "
+                "WHERE test_generation_run_id=:run"
+            ),
+            {"run": parent.run_id},
+        )
+    child = GenerationService(formal_database, max_retries=0).start(
+        PROJECT_ID,
+        RealLabeledMockProvider(),
+        "cycle-child",
+        resume_run_id=parent.run_id,
+        recovery_reason="PROVIDER_NETWORK_RECOVERY",
+    )
+    assert child.status == "failed"
+    row = formal_database.fetch_one(
+        "SELECT error_type FROM test_generation_runs WHERE test_generation_run_id=:run",
+        {"run": child.run_id},
+    )
+    assert row == {"error_type": "CHECKPOINT_PARENT_CYCLE"}

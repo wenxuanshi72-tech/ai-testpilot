@@ -47,6 +47,7 @@ from plugin.backend.app.test_generation_trace import (
     resolve_seeded_username_requirement,
 )
 from plugin.backend.app.test_intent_compiler import (
+    TEST_INTENT_COMPATIBILITY_VERSION,
     TEST_INTENT_COMPILER_VERSION,
     CompilationContext,
     DeterministicCandidateCompiler,
@@ -162,10 +163,15 @@ class CheckpointQualification:
     batch_key: str
     reusable: bool
     rejection_reason: str | None
+    source_run_id: str | None = None
     source_batch_id: str | None = None
     source_call_id: str | None = None
     response_hash: str | None = None
+    semantic_hash: str | None = None
     candidates: tuple[dict[str, Any], ...] = ()
+
+
+MAX_CHECKPOINT_PARENT_DEPTH = 100
 
 
 class TestGenerationService:
@@ -622,13 +628,16 @@ class TestGenerationService:
             "passed",
             {
                 "resume_source_run_id": resume_run_id,
+                "source_run_id": qualification.source_run_id,
                 "source_batch_id": qualification.source_batch_id,
                 "source_call_id": qualification.source_call_id,
                 "source_response_hash": qualification.response_hash,
+                "source_semantic_hash": qualification.semantic_hash,
                 "compatible_recovery_key": batch.input_hash,
                 "prompt_hash": self.prompts.content_hash,
                 "intent_schema_version": TEST_INTENT_SCHEMA_VERSION,
                 "candidate_schema_version": TEST_CASE_SCHEMA_VERSION,
+                "compatibility_version": TEST_INTENT_COMPATIBILITY_VERSION,
                 "compiler_version": TEST_INTENT_COMPILER_VERSION,
             },
         )
@@ -643,62 +652,117 @@ class TestGenerationService:
         provider_metadata: ProviderMetadata,
         target_run_id: str | None = None,
     ) -> CheckpointQualification:
-        source = self.database.fetch_one(
-            "SELECT b.test_generation_batch_id,c.test_generation_llm_call_id,"
-            "a.response_content,a.response_hash,a.parsed_json,p.parsed_hash "
-            "FROM test_generation_batches b "
-            "JOIN test_generation_runs r ON r.test_generation_run_id=b.test_generation_run_id "
-            "JOIN test_generation_llm_calls c ON c.test_generation_batch_id="
-            "b.test_generation_batch_id "
-            "JOIN test_generation_response_artifacts a ON a.test_generation_llm_call_id="
-            "c.test_generation_llm_call_id "
-            "LEFT JOIN test_generation_parsed_artifacts p "
-            "ON p.test_generation_llm_call_id=c.test_generation_llm_call_id "
-            "AND p.artifact_origin='runtime' "
-            "LEFT JOIN test_generation_call_validation_outcomes v "
-            "ON v.test_generation_llm_call_id=c.test_generation_llm_call_id "
-            "AND v.outcome_origin='runtime' "
-            "WHERE b.test_generation_run_id=:source AND b.input_hash=:hash "
-            "AND b.status='validated' "
-            "AND (v.validation_status='valid' OR "
-            "(v.test_generation_llm_call_id IS NULL AND c.validation_status='valid')) "
-            "AND c.prompt_hash=:prompt_hash AND c.schema_version=:schema "
-            "AND EXISTS (SELECT 1 FROM test_case_generation_audit_events e "
-            "WHERE e.test_generation_run_id=b.test_generation_run_id "
-            "AND e.test_generation_batch_id=b.test_generation_batch_id "
-            "AND e.event_type='intent_batch_compiled' "
-            "AND json_extract(e.details_json,'$.compiler_version')=:compiler_version) "
-            "AND r.provider=:provider AND r.model=:model AND r.provider_mode=:mode "
-            "ORDER BY c.created_at DESC,c.test_generation_llm_call_id DESC LIMIT 1",
-            {
-                "source": resume_run_id,
-                "hash": batch.input_hash,
-                "prompt_hash": self.prompts.content_hash,
-                "schema": TEST_INTENT_SCHEMA_VERSION,
-                "compiler_version": TEST_INTENT_COMPILER_VERSION,
-                "provider": provider_metadata.provider,
-                "model": provider_metadata.model,
-                "mode": provider_metadata.provider_mode,
-            },
+        current_snapshot_hashes = {
+            str(item["requirement_id"]): str(item["snapshot_hash"]) for item in snapshots
+        }
+        visited: set[str] = set()
+        source_run_id: str | None = resume_run_id
+        last_rejection = "CHECKPOINT_NOT_FOUND"
+        depth = 0
+        while source_run_id is not None:
+            if source_run_id in visited:
+                raise TestGenerationError("CHECKPOINT_PARENT_CYCLE")
+            if depth >= MAX_CHECKPOINT_PARENT_DEPTH:
+                raise TestGenerationError("CHECKPOINT_PARENT_DEPTH_EXCEEDED")
+            visited.add(source_run_id)
+            depth += 1
+            run = self.database.fetch_one(
+                "SELECT resume_source_run_id,requirement_snapshot_hash,plan_json "
+                "FROM test_generation_runs WHERE test_generation_run_id=:run",
+                {"run": source_run_id},
+            )
+            if not run:
+                raise TestGenerationError("CHECKPOINT_PARENT_RUN_NOT_FOUND")
+            source_plan_document = json.loads(str(run["plan_json"]))
+            source_snapshot_hashes = {
+                str(item["requirement_id"]): str(item["snapshot_hash"])
+                for item in source_plan_document.get("requirements", [])
+                if str(item.get("requirement_id")) in current_snapshot_hashes
+            }
+            if source_snapshot_hashes != current_snapshot_hashes:
+                return CheckpointQualification(
+                    batch.batch_key, False, "REQUIREMENT_SNAPSHOT_MISMATCH"
+                )
+            source_batches = {
+                str(item["batch_key"]): item for item in source_plan_document.get("batches", [])
+            }
+            source_plan = source_batches.get(batch.batch_key)
+            if not source_plan or not self._checkpoint_plan_matches(batch, source_plan):
+                last_rejection = "CHECKPOINT_BATCH_CONTRACT_MISMATCH"
+                source_run_id = (
+                    str(run["resume_source_run_id"]) if run["resume_source_run_id"] else None
+                )
+                continue
+            sources = self.database.fetch_all(
+                "SELECT b.test_generation_batch_id,c.test_generation_llm_call_id,"
+                "c.retry_count,c.http_status,c.finish_reason,a.response_content,a.response_hash,"
+                "COALESCE(p.parsed_json,a.parsed_json) AS parsed_json,p.parsed_hash "
+                "FROM test_generation_batches b "
+                "JOIN test_generation_llm_calls c ON c.test_generation_batch_id="
+                "b.test_generation_batch_id "
+                "JOIN test_generation_response_artifacts a ON "
+                "a.test_generation_llm_call_id=c.test_generation_llm_call_id "
+                "LEFT JOIN test_generation_parsed_artifacts p "
+                "ON p.test_generation_llm_call_id=c.test_generation_llm_call_id "
+                "AND p.artifact_origin='runtime' "
+                "WHERE b.test_generation_run_id=:source AND b.batch_key=:key "
+                "AND c.http_status=200 AND c.finish_reason='stop' "
+                "ORDER BY c.retry_count DESC,c.created_at DESC,c.test_generation_llm_call_id DESC",
+                {"source": source_run_id, "key": batch.batch_key},
+            )
+            for source in sources:
+                qualification = self._qualify_checkpoint_artifact(
+                    source_run_id=source_run_id,
+                    source=source,
+                    batch=batch,
+                    snapshots=snapshots,
+                    provider_metadata=provider_metadata,
+                    target_run_id=target_run_id,
+                )
+                if qualification.reusable:
+                    return qualification
+                last_rejection = qualification.rejection_reason or "CHECKPOINT_REJECTED"
+            source_run_id = (
+                str(run["resume_source_run_id"]) if run["resume_source_run_id"] else None
+            )
+        return CheckpointQualification(batch.batch_key, False, last_rejection)
+
+    @staticmethod
+    def _checkpoint_plan_matches(batch: GenerationBatch, source: dict[str, Any]) -> bool:
+        return (
+            source.get("case_type") == batch.case_type
+            and tuple(source.get("requirement_ids", ())) == batch.requirement_ids
+            and tuple(
+                str(slot.get("generation_slot_id")) for slot in source.get("generation_slots", ())
+            )
+            == tuple(str(slot["generation_slot_id"]) for slot in batch.generation_slots)
         )
-        if not source or not source["parsed_json"]:
-            return CheckpointQualification(batch.batch_key, False, "CHECKPOINT_NOT_FOUND")
+
+    def _qualify_checkpoint_artifact(
+        self,
+        *,
+        source_run_id: str,
+        source: dict[str, Any],
+        batch: GenerationBatch,
+        snapshots: list[dict[str, Any]],
+        provider_metadata: ProviderMetadata,
+        target_run_id: str | None,
+    ) -> CheckpointQualification:
+        if not source["parsed_json"]:
+            return CheckpointQualification(batch.batch_key, False, "PARSED_ARTIFACT_MISSING")
         response_content = str(source["response_content"])
         if hashlib.sha256(response_content.encode()).hexdigest() != source["response_hash"]:
-            return CheckpointQualification(
-                batch.batch_key, False, "RESPONSE_ARTIFACT_HASH_MISMATCH"
-            )
+            raise TestGenerationError("RESPONSE_ARTIFACT_HASH_MISMATCH")
         try:
             parsed = json.loads(str(source["parsed_json"]))
         except (TypeError, ValueError):
             return CheckpointQualification(batch.batch_key, False, "PARSED_ARTIFACT_INVALID_JSON")
         if source["parsed_hash"] and _hash_json(parsed) != source["parsed_hash"]:
-            return CheckpointQualification(batch.batch_key, False, "PARSED_ARTIFACT_HASH_MISMATCH")
+            raise TestGenerationError("PARSED_ARTIFACT_HASH_MISMATCH")
         try:
-            self._validate_batch_envelope(batch, parsed)
             accepted = normalize_intent_batch(parsed)
             self._validate_batch_envelope(batch, accepted)
-            context_run_id = target_run_id or resume_run_id
+            context_run_id = target_run_id or source_run_id
             candidates = tuple(
                 self._compile_intent_with_metadata(
                     context_run_id, provider_metadata, batch, snapshots, intent
@@ -711,9 +775,11 @@ class TestGenerationService:
             batch.batch_key,
             True,
             None,
+            source_run_id,
             str(source["test_generation_batch_id"]),
             str(source["test_generation_llm_call_id"]),
             str(source["response_hash"]),
+            _hash_json(parsed),
             candidates,
         )
 

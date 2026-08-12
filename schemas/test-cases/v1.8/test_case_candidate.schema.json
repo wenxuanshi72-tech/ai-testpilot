@@ -1,0 +1,313 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-testpilot.local/schemas/test-cases/v1.8/test_case_candidate.schema.json",
+  "title": "AI TestPilot candidate test case 1.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "case_id",
+    "case_version",
+    "case_type",
+    "title",
+    "objective",
+    "requirement_ids",
+    "primary_requirement_id",
+    "priority",
+    "risk_level",
+    "test_level",
+    "test_category",
+    "preconditions",
+    "test_data",
+    "steps",
+    "expected_results",
+    "cleanup",
+    "tags",
+    "source",
+    "generation_run_id",
+    "review_status",
+    "lifecycle_status",
+    "created_at",
+    "semantic_content_hash",
+    "content_hash",
+    "trace",
+    "type_details"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "test-cases@1.8.0"
+    },
+    "case_id": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/case_id"
+    },
+    "case_version": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/case_version"
+    },
+    "case_type": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/case_type"
+    },
+    "title": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/title"
+    },
+    "objective": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/objective"
+    },
+    "requirement_ids": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/requirement_ids"
+    },
+    "priority": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/priority"
+    },
+    "risk_level": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/risk_level"
+    },
+    "test_level": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/test_level"
+    },
+    "test_category": {
+      "enum": [
+        "positive",
+        "negative",
+        "boundary",
+        "security",
+        "functional",
+        "accessibility",
+        "resilience",
+        "usability",
+        "data"
+      ]
+    },
+    "preconditions": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/preconditions"
+    },
+    "test_data": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/test_data"
+    },
+    "steps": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/steps"
+    },
+    "expected_results": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/expected_results"
+    },
+    "cleanup": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/cleanup"
+    },
+    "tags": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/tags"
+    },
+    "source": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/source"
+    },
+    "generation_run_id": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/generation_run_id"
+    },
+    "review_status": {
+      "const": "draft"
+    },
+    "lifecycle_status": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/lifecycle_status"
+    },
+    "created_at": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/created_at"
+    },
+    "content_hash": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/content_hash"
+    },
+    "type_details": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/api_details_v15"
+        },
+        {
+          "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/$defs/ui_details"
+        },
+        {
+          "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/$defs/manual_details"
+        }
+      ]
+    },
+    "trace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "project_id",
+        "prd_document_id",
+        "prd_version_id",
+        "requirements",
+        "generation_prompt_version",
+        "generation_schema_version",
+        "provider_mode",
+        "model"
+      ],
+      "properties": {
+        "project_id": {
+          "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/$defs/trace/properties/project_id"
+        },
+        "prd_document_id": {
+          "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/$defs/trace/properties/prd_document_id"
+        },
+        "prd_version_id": {
+          "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/$defs/trace/properties/prd_version_id"
+        },
+        "requirements": {
+          "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/$defs/trace/properties/requirements"
+        },
+        "generation_prompt_version": {
+          "const": "test-generation@3.0.0"
+        },
+        "generation_schema_version": {
+          "const": "test-cases@1.8.0"
+        },
+        "provider_mode": {
+          "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/$defs/trace/properties/provider_mode"
+        },
+        "model": {
+          "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/$defs/trace/properties/model"
+        }
+      }
+    },
+    "primary_requirement_id": {
+      "type": "string",
+      "pattern": "^REQ-[A-Z0-9-]+$"
+    },
+    "semantic_content_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "$defs": {
+    "setup_api_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "path", "request_body", "expected_status", "description"],
+      "properties": {
+        "method": {
+          "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "N/A"]
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^(?:|/[A-Za-z0-9_./{}-]*)$",
+          "maxLength": 240
+        },
+        "request_body": {
+          "type": ["object", "string", "null"]
+        },
+        "expected_status": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 599
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        }
+      }
+    },
+    "api_details_v15": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "method",
+        "path",
+        "headers",
+        "session_handling",
+        "request",
+        "expected_status",
+        "response_assertions",
+        "response_schema_assertions",
+        "security_assertions",
+        "state_assertions",
+        "setup_requests",
+        "cleanup_requests"
+      ],
+      "properties": {
+        "kind": {
+          "const": "api"
+        },
+        "method": {
+          "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "N/A"]
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^(?:|/[A-Za-z0-9_./{}-]*)$",
+          "maxLength": 240
+        },
+        "headers": {
+          "type": "object",
+          "maxProperties": 20,
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 300
+          }
+        },
+        "session_handling": {
+          "enum": [
+            "none",
+            "new_session",
+            "reuse_isolated_session",
+            "expired_session",
+            "revoked_session"
+          ]
+        },
+        "request": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path_parameters", "query_parameters", "body"],
+          "properties": {
+            "path_parameters": {
+              "type": "object"
+            },
+            "query_parameters": {
+              "type": "object"
+            },
+            "body": {
+              "type": ["object", "string", "null"]
+            }
+          }
+        },
+        "expected_status": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 599
+        },
+        "response_assertions": {
+          "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/$defs/assertion_list"
+        },
+        "response_schema_assertions": {
+          "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/$defs/assertion_list"
+        },
+        "security_assertions": {
+          "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/$defs/assertion_list"
+        },
+        "state_assertions": {
+          "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/$defs/assertion_list"
+        },
+        "setup_requests": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "oneOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "$ref": "#/$defs/setup_api_request"
+              }
+            ]
+          }
+        },
+        "cleanup_requests": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "type": "string",
+            "maxLength": 300
+          }
+        }
+      }
+    }
+  }
+}

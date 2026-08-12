@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-testpilot.local/schemas/test-cases/v1/ui_case_batch.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["batch_id", "case_type", "cases", "unsupported", "reported_count", "batch_complete"],
+  "properties": {
+    "batch_id": { "type": "string" },
+    "case_type": { "const": "ui" },
+    "cases": { "type": "array", "minItems": 0, "maxItems": 25, "items": { "type": "object" } },
+    "unsupported": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["requirement_id", "reason"],
+        "properties": { "requirement_id": { "type": "string" }, "reason": { "type": "string" } }
+      }
+    },
+    "reported_count": { "type": "integer", "minimum": 0, "maximum": 25 },
+    "batch_complete": { "const": true }
+  }
+}

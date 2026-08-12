@@ -1,0 +1,177 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-testpilot.local/schemas/test-cases/v1.3/generation_plan.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "requirement_snapshot_hash",
+    "requirement_count",
+    "requirements",
+    "generation_slot_count",
+    "batches",
+    "estimated_call_count",
+    "max_retries",
+    "coverage_dimensions",
+    "not_applicable"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "test-cases@1.3.0"
+    },
+    "requirement_snapshot_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "requirement_count": {
+      "const": 19
+    },
+    "requirements": {
+      "type": "array",
+      "minItems": 19,
+      "maxItems": 19,
+      "items": {
+        "type": "object"
+      }
+    },
+    "batches": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 60,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "batch_key",
+          "batch_index",
+          "case_type",
+          "requirement_ids",
+          "generation_slots",
+          "max_cases",
+          "max_tokens",
+          "input_hash"
+        ],
+        "properties": {
+          "batch_key": {
+            "type": "string",
+            "pattern": "^TGB-(API|UI|MAN)-[0-9]{3}$"
+          },
+          "batch_index": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "case_type": {
+            "enum": ["api", "ui", "manual"]
+          },
+          "requirement_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 10,
+            "uniqueItems": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "max_cases": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 25
+          },
+          "max_tokens": {
+            "type": "integer",
+            "minimum": 256,
+            "maximum": 8192
+          },
+          "input_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "generation_slots": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 25,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "generation_slot_id",
+                "primary_requirement_id",
+                "requirement_ids",
+                "case_type",
+                "case_id"
+              ],
+              "properties": {
+                "generation_slot_id": {
+                  "type": "string",
+                  "pattern": "^GSL-(API|UI|MAN)-[A-F0-9]{16}$"
+                },
+                "primary_requirement_id": {
+                  "type": "string",
+                  "pattern": "^REQ-[A-Z0-9-]+$"
+                },
+                "requirement_ids": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 12,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "pattern": "^REQ-[A-Z0-9-]+$"
+                  }
+                },
+                "case_type": {
+                  "enum": ["api", "ui", "manual"]
+                },
+                "case_id": {
+                  "type": "string",
+                  "pattern": "^TC-(API|UI|MAN)-[A-Z0-9][A-Z0-9-]{2,80}$"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "estimated_call_count": {
+      "type": "integer",
+      "minimum": 3,
+      "maximum": 60
+    },
+    "max_retries": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2
+    },
+    "coverage_dimensions": {
+      "type": "array",
+      "minItems": 5,
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
+      }
+    },
+    "not_applicable": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["requirement_id", "case_type", "reason"],
+        "properties": {
+          "requirement_id": {
+            "type": "string"
+          },
+          "case_type": {
+            "enum": ["api", "ui", "manual"]
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "generation_slot_count": {
+      "type": "integer",
+      "minimum": 3,
+      "maximum": 100
+    }
+  }
+}

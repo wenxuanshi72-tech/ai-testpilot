@@ -1,0 +1,1 @@
+Validation failed: {{validation_error}}; schema={{intent_schema_version}}. Preserve requirement semantics. {{type_recovery_rules}} Return one complete corrected JSON object with exactly the supplied generation_slot_id values, no system fields, Markdown, or explanation.

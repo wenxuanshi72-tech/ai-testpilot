@@ -5,11 +5,17 @@ import json
 import os
 import time
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 import httpx
 
 from plugin.backend.app.prompts import PromptRegistry
+from plugin.backend.app.test_generation_payloads import (
+    contract_for_case_type,
+    project_generation_slot,
+)
+from plugin.backend.app.test_generation_prompts import TestGenerationPromptRegistry
+from plugin.backend.app.test_intent_mock import build_mock_intent_batch
 
 
 @dataclass(frozen=True)
@@ -29,6 +35,8 @@ class ProviderResponse:
     http_status: int
     provider_request_id: str | None
     max_tokens: int
+    input_cache_hit_tokens: int | None = None
+    input_cache_miss_tokens: int | None = None
 
 
 class ProviderConfigurationError(Exception):
@@ -60,6 +68,18 @@ class LLMProvider(Protocol):
         max_requirements: int,
         recovery: bool = False,
     ) -> ProviderResponse: ...
+    def generate_test_cases(
+        self,
+        *,
+        case_type: str,
+        batch_id: str,
+        generation_run_id: str,
+        generation_slots: list[dict[str, Any]],
+        max_cases: int,
+        max_tokens: int,
+        recovery: bool = False,
+        validation_error: str | None = None,
+    ) -> ProviderResponse: ...
 
 
 class DeepSeekProvider:
@@ -71,12 +91,14 @@ class DeepSeekProvider:
         timeout_seconds: float,
         max_tokens: int,
         prompts: PromptRegistry,
+        generation_prompts: TestGenerationPromptRegistry | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout_seconds = timeout_seconds
         self.max_tokens = max_tokens
         self.prompts = prompts
+        self.generation_prompts = generation_prompts or TestGenerationPromptRegistry()
 
     @property
     def metadata(self) -> ProviderMetadata:
@@ -112,6 +134,34 @@ class DeepSeekProvider:
             recovery=recovery,
         )
         return self._call(messages, self.max_tokens)
+
+    def generate_test_cases(
+        self,
+        *,
+        case_type: str,
+        batch_id: str,
+        generation_run_id: str,
+        generation_slots: list[dict[str, Any]],
+        max_cases: int,
+        max_tokens: int,
+        recovery: bool = False,
+        validation_error: str | None = None,
+    ) -> ProviderResponse:
+        api_contract, ui_contract = contract_for_case_type(case_type)
+        projected = [project_generation_slot(item, item["snapshot"]) for item in generation_slots]
+        messages = self.generation_prompts.generation_messages(
+            case_type=case_type,
+            batch_id=batch_id,
+            generation_run_id=generation_run_id,
+            provider_mode="real",
+            generation_slots=projected,
+            max_cases=max_cases,
+            recovery=recovery,
+            validation_error=validation_error,
+            api_contract=api_contract,
+            ui_contract=ui_contract,
+        )
+        return self._call(messages, min(max_tokens, self.max_tokens))
 
     def _call(self, messages: list[dict[str, str]], max_tokens: int) -> ProviderResponse:
         self.validate_config()
@@ -164,6 +214,8 @@ class DeepSeekProvider:
             http_status=response.status_code,
             provider_request_id=response.headers.get("x-request-id") or payload.get("id"),
             max_tokens=max_tokens,
+            input_cache_hit_tokens=usage.get("prompt_cache_hit_tokens"),
+            input_cache_miss_tokens=usage.get("prompt_cache_miss_tokens"),
         )
 
 
@@ -228,6 +280,31 @@ class MockLLMProvider:
                 "batch_complete": True,
             },
             1024,
+        )
+
+    def generate_test_cases(
+        self,
+        *,
+        case_type: str,
+        batch_id: str,
+        generation_run_id: str,
+        generation_slots: list[dict[str, Any]],
+        max_cases: int,
+        max_tokens: int,
+        recovery: bool = False,
+        validation_error: str | None = None,
+    ) -> ProviderResponse:
+        if self.responses:
+            return self._next()
+        slot_defs = [
+            {key: value for key, value in item.items() if key != "snapshot"}
+            for item in generation_slots
+        ]
+        snapshots = {item["primary_requirement_id"]: item["snapshot"] for item in generation_slots}
+        intents = build_mock_intent_batch(case_type, slot_defs, snapshots, max_cases)
+        return self._response(
+            {"intents": intents},
+            max_tokens,
         )
 
     def _next(self) -> ProviderResponse:

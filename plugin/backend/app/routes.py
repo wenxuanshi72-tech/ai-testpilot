@@ -16,6 +16,7 @@ from plugin.backend.app.errors import ApiError, request_id
 from plugin.backend.app.ids import new_id
 from plugin.backend.app.prompts import PROMPT_VERSION, SCHEMA_VERSION, PromptRegistry
 from plugin.backend.app.providers import DeepSeekProvider, LLMProvider, MockLLMProvider
+from plugin.backend.app.test_generation import TestGenerationError, TestGenerationService
 
 api = Blueprint("plugin_api", __name__, url_prefix="/api/v1")
 
@@ -60,6 +61,26 @@ def _analysis_service() -> AnalysisService:
         max_retries=current_app.config["LLM_MAX_RETRIES"],
         call_max_output_tokens=current_app.config["LLM_MAX_OUTPUT_TOKENS"],
         run_max_output_tokens=current_app.config["LLM_RUN_MAX_OUTPUT_TOKENS"],
+    )
+
+
+def _test_generation_service() -> TestGenerationService:
+    return TestGenerationService(
+        _database(),
+        max_requirements_per_batch=current_app.config["TEST_GENERATION_MAX_REQUIREMENTS_PER_BATCH"],
+        max_cases_per_batch=current_app.config["TEST_GENERATION_MAX_CASES_PER_BATCH"],
+        max_tokens_per_batch=current_app.config["TEST_GENERATION_MAX_OUTPUT_TOKENS"],
+        max_retries=current_app.config["TEST_GENERATION_MAX_RETRIES"],
+        max_corrections_per_batch=current_app.config["TEST_GENERATION_MAX_CORRECTIONS_PER_BATCH"],
+        max_corrections_per_run=current_app.config["TEST_GENERATION_MAX_CORRECTIONS_PER_RUN"],
+        max_provider_retries_per_batch=current_app.config[
+            "TEST_GENERATION_MAX_PROVIDER_RETRIES_PER_BATCH"
+        ],
+        max_provider_retries_per_run=current_app.config[
+            "TEST_GENERATION_MAX_PROVIDER_RETRIES_PER_RUN"
+        ],
+        max_total_provider_calls=current_app.config["TEST_GENERATION_MAX_TOTAL_PROVIDER_CALLS"],
+        max_run_cost_usd=current_app.config["TEST_GENERATION_MAX_COST_USD"],
     )
 
 
@@ -213,6 +234,61 @@ def analysis_requirements(analysis_run_id: str) -> tuple[Any, int]:
 @api.get("/projects/<project_id>/requirements")
 def project_requirements(project_id: str) -> tuple[Any, int]:
     return _requirements_response(project_id, None)
+
+
+@api.get("/projects/<project_id>/test-generation-plan")
+def test_generation_plan(project_id: str) -> tuple[Any, int]:
+    try:
+        plan = _test_generation_service().preflight(project_id)
+    except TestGenerationError as error:
+        raise ApiError("GENERATION_PREFLIGHT_ERROR", str(error), 422) from error
+    return jsonify({"data": plan, "meta": {"request_id": request_id()}}), 200
+
+
+@api.post("/projects/<project_id>/test-generation-runs")
+def create_test_generation_run(project_id: str) -> tuple[Any, int]:
+    payload = _json_object()
+    provider = _provider(str(payload.get("provider_mode", "")).strip())
+    key = (
+        request.headers.get("Idempotency-Key")
+        or str(payload.get("idempotency_key", "")).strip()
+        or new_id("IDEM")
+    )
+    if len(key) > 160:
+        raise ApiError("VALIDATION_ERROR", "Idempotency key is too long.", 422)
+    try:
+        result = _test_generation_service().start(project_id, provider, key)
+    except TestGenerationError as error:
+        raise ApiError("TEST_GENERATION_ERROR", str(error), 422) from error
+    return jsonify({"data": result.__dict__, "meta": {"request_id": request_id()}}), 202
+
+
+@api.get("/test-generation-runs/<run_id>")
+def get_test_generation_run(run_id: str) -> tuple[Any, int]:
+    run = _database().fetch_one(
+        "SELECT * FROM test_generation_runs WHERE test_generation_run_id=:id", {"id": run_id}
+    )
+    if not run:
+        raise ApiError("NOT_FOUND", "The test generation run was not found.", 404)
+    batches = _database().fetch_all(
+        "SELECT test_generation_batch_id,batch_key,batch_index,case_type,"
+        "requirement_ids_json,input_hash,max_cases,max_tokens,status,retry_count,"
+        "reported_count,actual_count,finish_reason,validation_status,error_type,created_at,"
+        "completed_at FROM test_generation_batches WHERE test_generation_run_id=:run "
+        "ORDER BY batch_index",
+        {"run": run_id},
+    )
+    return jsonify({"data": {**run, "batches": batches}, "meta": {"request_id": request_id()}}), 200
+
+
+@api.get("/test-generation-runs/<run_id>/candidate-collection")
+def phase6_candidate_collection(run_id: str) -> tuple[Any, int]:
+    try:
+        collection = _test_generation_service().phase6_candidate_collection(run_id)
+    except TestGenerationError as error:
+        status = 404 if str(error) == "GENERATION_RUN_NOT_FOUND" else 409
+        raise ApiError("CANDIDATE_COLLECTION_UNAVAILABLE", str(error), status) from error
+    return jsonify({"data": collection, "meta": {"request_id": request_id()}}), 200
 
 
 def _requirements_response(project_id: str, analysis_run_id: str | None) -> tuple[Any, int]:

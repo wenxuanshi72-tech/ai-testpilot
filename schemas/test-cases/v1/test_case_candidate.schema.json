@@ -1,0 +1,311 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json",
+  "title": "AI TestPilot candidate test case",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "case_id",
+    "case_version",
+    "case_type",
+    "title",
+    "objective",
+    "requirement_ids",
+    "priority",
+    "risk_level",
+    "test_level",
+    "test_category",
+    "preconditions",
+    "test_data",
+    "steps",
+    "expected_results",
+    "cleanup",
+    "tags",
+    "source",
+    "generation_run_id",
+    "review_status",
+    "lifecycle_status",
+    "created_at",
+    "content_hash",
+    "trace",
+    "type_details"
+  ],
+  "properties": {
+    "schema_version": { "const": "test-cases@1.0.0" },
+    "case_id": { "type": "string", "pattern": "^TC-(API|UI|MAN)-[A-Z0-9][A-Z0-9-]{2,80}$" },
+    "case_version": { "const": 1 },
+    "case_type": { "enum": ["api", "ui", "manual"] },
+    "title": { "type": "string", "minLength": 5, "maxLength": 180 },
+    "objective": { "type": "string", "minLength": 10, "maxLength": 1000 },
+    "requirement_ids": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 12,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^REQ-[A-Z0-9-]+$" }
+    },
+    "priority": { "enum": ["P0", "P1", "P2", "P3"] },
+    "risk_level": { "enum": ["critical", "high", "medium", "low"] },
+    "test_level": { "enum": ["component", "integration", "system", "acceptance", "manual"] },
+    "test_category": {
+      "enum": [
+        "positive",
+        "negative",
+        "boundary",
+        "security",
+        "accessibility",
+        "resilience",
+        "usability",
+        "data"
+      ]
+    },
+    "preconditions": {
+      "type": "array",
+      "maxItems": 20,
+      "items": { "type": "string", "minLength": 1, "maxLength": 300 }
+    },
+    "test_data": {
+      "type": "array",
+      "maxItems": 30,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "source", "value", "sensitive", "classification"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
+          "source": { "enum": ["literal", "fixture", "generated", "environment"] },
+          "value": { "type": ["string", "number", "boolean", "null"] },
+          "sensitive": { "type": "boolean" },
+          "classification": {
+            "type": ["string", "null"],
+            "enum": [null, "credential", "token", "cookie", "personal", "confidential"]
+          }
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 40,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["step_id", "action", "instruction"],
+        "properties": {
+          "step_id": { "type": "string", "pattern": "^STEP-[0-9]{3}$" },
+          "action": { "type": "string", "minLength": 2, "maxLength": 60 },
+          "instruction": { "type": "string", "minLength": 3, "maxLength": 600 }
+        }
+      }
+    },
+    "expected_results": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": { "type": "string", "minLength": 3, "maxLength": 600 }
+    },
+    "cleanup": {
+      "type": "array",
+      "maxItems": 20,
+      "items": { "type": "string", "minLength": 1, "maxLength": 300 }
+    },
+    "tags": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,39}$" }
+    },
+    "source": { "enum": ["ai_real", "ai_mock"] },
+    "generation_run_id": { "type": "string", "pattern": "^TGR-[A-F0-9]{32}$" },
+    "review_status": { "const": "not_reviewed" },
+    "lifecycle_status": { "const": "validated_pending_review" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "content_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "trace": { "$ref": "#/$defs/trace" },
+    "type_details": {
+      "oneOf": [
+        { "$ref": "#/$defs/api_details" },
+        { "$ref": "#/$defs/ui_details" },
+        { "$ref": "#/$defs/manual_details" }
+      ]
+    }
+  },
+  "$defs": {
+    "requirement_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requirement_id", "requirement_version", "snapshot_hash", "source_block_id"],
+      "properties": {
+        "requirement_id": { "type": "string", "pattern": "^REQ-[A-Z0-9-]+$" },
+        "requirement_version": { "type": "integer", "minimum": 1 },
+        "snapshot_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "source_block_id": { "type": "string", "pattern": "^BLK-[A-Z0-9-]+$" }
+      }
+    },
+    "trace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "project_id",
+        "prd_document_id",
+        "prd_version_id",
+        "requirements",
+        "generation_prompt_version",
+        "generation_schema_version",
+        "provider_mode",
+        "model"
+      ],
+      "properties": {
+        "project_id": { "type": "string", "pattern": "^PRJ-[A-F0-9]{32}$" },
+        "prd_document_id": { "type": "string", "pattern": "^PRD-[A-F0-9]{32}$" },
+        "prd_version_id": { "type": "string", "pattern": "^PRDV-[A-F0-9]{32}$" },
+        "requirements": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "items": { "$ref": "#/$defs/requirement_snapshot" }
+        },
+        "generation_prompt_version": { "const": "test-generation@1.1.0" },
+        "generation_schema_version": { "const": "test-cases@1.0.0" },
+        "provider_mode": { "enum": ["real", "mock"] },
+        "model": { "type": "string", "minLength": 1, "maxLength": 120 }
+      }
+    },
+    "assertion_list": {
+      "type": "array",
+      "maxItems": 30,
+      "items": { "type": "string", "minLength": 3, "maxLength": 500 }
+    },
+    "api_details": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "method",
+        "path",
+        "headers",
+        "session_handling",
+        "request",
+        "expected_status",
+        "response_assertions",
+        "response_schema_assertions",
+        "security_assertions",
+        "state_assertions",
+        "setup_requests",
+        "cleanup_requests"
+      ],
+      "properties": {
+        "kind": { "const": "api" },
+        "method": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"] },
+        "path": { "type": "string", "pattern": "^/[A-Za-z0-9_./{}-]*$", "maxLength": 240 },
+        "headers": {
+          "type": "object",
+          "maxProperties": 20,
+          "additionalProperties": { "type": "string", "maxLength": 300 }
+        },
+        "session_handling": {
+          "enum": [
+            "none",
+            "new_session",
+            "reuse_isolated_session",
+            "expired_session",
+            "revoked_session"
+          ]
+        },
+        "request": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path_parameters", "query_parameters", "body"],
+          "properties": {
+            "path_parameters": { "type": "object" },
+            "query_parameters": { "type": "object" },
+            "body": { "type": ["object", "null"] }
+          }
+        },
+        "expected_status": { "type": "integer", "minimum": 100, "maximum": 599 },
+        "response_assertions": { "$ref": "#/$defs/assertion_list" },
+        "response_schema_assertions": { "$ref": "#/$defs/assertion_list" },
+        "security_assertions": { "$ref": "#/$defs/assertion_list" },
+        "state_assertions": { "$ref": "#/$defs/assertion_list" },
+        "setup_requests": {
+          "type": "array",
+          "maxItems": 10,
+          "items": { "type": "string", "maxLength": 300 }
+        },
+        "cleanup_requests": {
+          "type": "array",
+          "maxItems": 10,
+          "items": { "type": "string", "maxLength": 300 }
+        }
+      }
+    },
+    "ui_details": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "route",
+        "viewport",
+        "locator_intents",
+        "user_actions",
+        "visible_assertions",
+        "url_assertions",
+        "session_assertions",
+        "network_assertions",
+        "evidence_policy",
+        "cleanup_strategy"
+      ],
+      "properties": {
+        "kind": { "const": "ui" },
+        "route": { "type": "string", "pattern": "^/[A-Za-z0-9_./{}-]*$", "maxLength": 240 },
+        "viewport": { "enum": ["desktop", "tablet", "mobile", "responsive-matrix"] },
+        "locator_intents": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["strategy", "value"],
+            "properties": {
+              "strategy": { "enum": ["role", "label", "name", "test-id", "placeholder"] },
+              "value": { "type": "string", "minLength": 1, "maxLength": 160 }
+            }
+          }
+        },
+        "user_actions": { "$ref": "#/$defs/assertion_list" },
+        "visible_assertions": { "$ref": "#/$defs/assertion_list" },
+        "url_assertions": { "$ref": "#/$defs/assertion_list" },
+        "session_assertions": { "$ref": "#/$defs/assertion_list" },
+        "network_assertions": { "$ref": "#/$defs/assertion_list" },
+        "evidence_policy": { "const": "deferred_no_capture" },
+        "cleanup_strategy": { "type": "string", "minLength": 1, "maxLength": 400 }
+      }
+    },
+    "manual_details": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "tester_instructions",
+        "environment",
+        "visual_checkpoints",
+        "accessibility_checkpoints",
+        "exploratory_charter",
+        "expected_observable_result",
+        "evidence_recommendation"
+      ],
+      "properties": {
+        "kind": { "const": "manual" },
+        "tester_instructions": { "$ref": "#/$defs/assertion_list" },
+        "environment": { "type": "string", "minLength": 1, "maxLength": 400 },
+        "visual_checkpoints": { "$ref": "#/$defs/assertion_list" },
+        "accessibility_checkpoints": { "$ref": "#/$defs/assertion_list" },
+        "exploratory_charter": { "type": ["string", "null"], "maxLength": 800 },
+        "expected_observable_result": { "type": "string", "minLength": 3, "maxLength": 800 },
+        "evidence_recommendation": { "type": "string", "minLength": 1, "maxLength": 500 }
+      }
+    }
+  }
+}

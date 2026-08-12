@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-testpilot.local/schemas/test-intents/v1/ui_intent_batch.schema.json",
+  "$ref": "#/$defs/batch",
+  "$defs": {
+    "batch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "batch_id",
+        "case_type",
+        "intents",
+        "unsupported",
+        "reported_count",
+        "batch_complete"
+      ],
+      "properties": {
+        "batch_id": { "type": "string" },
+        "case_type": { "const": "ui" },
+        "intents": {
+          "type": "array",
+          "maxItems": 25,
+          "items": { "$ref": "test_intent.schema.json" }
+        },
+        "unsupported": { "type": "array", "items": { "$ref": "#/$defs/unsupported" } },
+        "reported_count": { "type": "integer", "minimum": 0, "maximum": 25 },
+        "batch_complete": { "const": true }
+      }
+    },
+    "unsupported": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requirement_id", "reason"],
+      "properties": {
+        "requirement_id": { "type": "string", "pattern": "^REQ-[A-Z0-9-]+$" },
+        "reason": { "type": "string", "minLength": 3, "maxLength": 500 }
+      }
+    }
+  }
+}

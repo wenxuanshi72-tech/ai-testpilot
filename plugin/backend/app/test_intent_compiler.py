@@ -968,6 +968,9 @@ class DeterministicCandidateCompiler:
         if slot_id not in context.slots:
             raise TestIntentCompilationError("GENERATION_SLOT_UNKNOWN_OR_CROSS_BATCH")
         slot = context.slots[slot_id]
+        required_scenario = slot.get("required_scenario_type")
+        if required_scenario is not None and intent["scenario_type"] != required_scenario:
+            raise TestIntentCompilationError("GENERATION_SLOT_SCENARIO_MISMATCH")
         requirement_ids = list(slot["requirement_ids"])
         primary = str(slot["primary_requirement_id"])
         if (

@@ -736,6 +736,10 @@ class TestGenerationService:
                 str(slot.get("generation_slot_id")) for slot in source.get("generation_slots", ())
             )
             == tuple(str(slot["generation_slot_id"]) for slot in batch.generation_slots)
+            and tuple(
+                slot.get("required_scenario_type") for slot in source.get("generation_slots", ())
+            )
+            == tuple(slot.get("required_scenario_type") for slot in batch.generation_slots)
         )
 
     def _qualify_checkpoint_artifact(

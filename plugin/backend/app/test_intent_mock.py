@@ -42,7 +42,13 @@ def _intent(slot: dict[str, Any], snapshot: dict[str, Any]) -> dict[str, Any]:
             if case_type == "api"
             else "Registration fails with accessible minimum-length feedback."
         ]
-    scenario = "boundary" if seeded else _scenario(requirement, case_type)
+    scenario = (
+        str(slot["required_scenario_type"])
+        if "required_scenario_type" in slot
+        else "boundary"
+        if seeded
+        else _scenario(requirement, case_type)
+    )
     return {
         "generation_slot_id": slot["generation_slot_id"],
         "title": f"{case_type.upper()} intent: {requirement['title']}"[:180],

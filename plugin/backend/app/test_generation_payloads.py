@@ -102,9 +102,12 @@ def _assert_semantics_preserved(
 
 def project_generation_slot(slot: dict[str, Any], snapshot: dict[str, Any]) -> dict[str, Any]:
     """Project one immutable system-owned slot plus its formal requirement context."""
-    return {
+    projected = {
         "generation_slot_id": slot["generation_slot_id"],
         "primary_requirement_id": slot["primary_requirement_id"],
         "requirement_ids": list(slot["requirement_ids"]),
         "requirement": project_requirement_snapshot(snapshot),
     }
+    if "required_scenario_type" in slot:
+        projected["required_scenario_type"] = slot["required_scenario_type"]
+    return projected

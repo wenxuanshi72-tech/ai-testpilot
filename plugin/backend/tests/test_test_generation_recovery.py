@@ -421,3 +421,54 @@ def test_checkpoint_parent_cycle_is_terminal_system_error(
         {"run": child.run_id},
     )
     assert row == {"error_type": "CHECKPOINT_PARENT_CYCLE"}
+
+
+def test_accessibility_slot_invalidates_only_its_manual_batch(
+    formal_database: PluginDatabase,
+) -> None:
+    service = GenerationService(formal_database, max_retries=0)
+    plan = service.preflight(PROJECT_ID)
+    slots = [slot for batch in plan["batches"] for slot in batch["generation_slots"]]
+    accessibility = [
+        (batch["batch_key"], slot)
+        for batch in plan["batches"]
+        for slot in batch["generation_slots"]
+        if slot.get("required_scenario_type") == "accessibility"
+    ]
+    assert len(slots) == 46
+    assert len(plan["batches"]) == 13
+    assert len(accessibility) == 1
+    assert accessibility[0][1]["case_type"] == "manual"
+
+
+def test_accessibility_slot_requires_matching_model_semantics(
+    formal_database: PluginDatabase,
+) -> None:
+    service = GenerationService(formal_database, max_retries=0)
+    plan = service.preflight(PROJECT_ID)
+    snapshots = service._load_requirement_snapshots(PROJECT_ID)
+    batch = next(item for item in service._plan_batches(plan) if item.batch_key == "TGB-MAN-003")
+    intent = MockLLMProvider().generate_test_cases(
+        case_type="manual",
+        batch_id=batch.batch_key,
+        generation_run_id="TGR-" + "0" * 32,
+        generation_slots=[
+            {**slot, "snapshot": snapshots[slot["primary_requirement_id"]]}
+            for slot in batch.generation_slots
+        ],
+        max_cases=batch.max_cases,
+        max_tokens=batch.max_tokens,
+    )
+    parsed = json.loads(intent.content)
+    required = next(
+        item
+        for item in parsed["intents"]
+        if item["generation_slot_id"]
+        == next(
+            slot["generation_slot_id"]
+            for slot in batch.generation_slots
+            if slot.get("required_scenario_type") == "accessibility"
+        )
+    )
+    assert required["scenario_type"] == "accessibility"
+    assert required["type_intent"]["accessibility_checkpoints"]

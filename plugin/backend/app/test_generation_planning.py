@@ -26,6 +26,16 @@ from plugin.backend.app.test_intent_schemas import TEST_INTENT_SCHEMA_VERSION
 
 CAPACITY_PLANNER_VERSION = "test-generation-capacity-planner@2.0.0"
 API_INPUT_BUDGET_TOKENS = 2400
+ACCESSIBILITY_TERMS = (
+    "accessible",
+    "accessibility",
+    "error",
+    "feedback",
+    "validation",
+    "response",
+    "label",
+    "focus",
+)
 
 
 class CapacityPlanningError(Exception):
@@ -61,13 +71,30 @@ def make_generation_slot(requirement_id: str, case_type: str) -> dict[str, Any]:
     else:
         suffix = re.sub(r"[^A-Z0-9]+", "-", requirement_id.upper()).strip("-")[:60]
         case_id = f"TC-{label}-{suffix}"
-    return {
+    slot = {
         "generation_slot_id": f"GSL-{label}-{digest}",
         "primary_requirement_id": requirement_id,
         "requirement_ids": [requirement_id],
         "case_type": case_type,
         "case_id": case_id,
     }
+    return slot
+
+
+def _assign_manual_accessibility_slot(
+    slots: list[dict[str, Any]], snapshots: dict[str, dict[str, Any]]
+) -> None:
+    def rank(slot: dict[str, Any]) -> tuple[int, str]:
+        requirement = snapshots[slot["primary_requirement_id"]]["requirement"]
+        content = json.dumps(requirement, ensure_ascii=False).casefold()
+        return (
+            sum(content.count(term) for term in ACCESSIBILITY_TERMS),
+            slot["primary_requirement_id"],
+        )
+
+    if slots:
+        selected = max(slots, key=rank)
+        selected["required_scenario_type"] = "accessibility"
 
 
 def build_capacity_bounded_batches(
@@ -87,6 +114,8 @@ def build_capacity_bounded_batches(
     labels = {"api": "API", "ui": "UI", "manual": "MAN"}
     for case_type in ("api", "ui", "manual"):
         pending = [make_generation_slot(rid, case_type) for rid in applicability[case_type]]
+        if case_type == "manual":
+            _assign_manual_accessibility_slot(pending, snapshots)
         type_index = 1
         while pending:
             selected: list[dict[str, Any]] = []

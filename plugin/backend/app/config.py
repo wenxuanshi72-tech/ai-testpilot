@@ -40,13 +40,13 @@ class PluginConfig:
                 os.getenv("TEST_GENERATION_MAX_CORRECTIONS_PER_RUN", "8")
             ),
             "TEST_GENERATION_MAX_PROVIDER_RETRIES_PER_BATCH": int(
-                os.getenv("TEST_GENERATION_MAX_PROVIDER_RETRIES_PER_BATCH", "1")
+                os.getenv("TEST_GENERATION_MAX_PROVIDER_RETRIES_PER_BATCH", "3")
             ),
             "TEST_GENERATION_MAX_PROVIDER_RETRIES_PER_RUN": int(
-                os.getenv("TEST_GENERATION_MAX_PROVIDER_RETRIES_PER_RUN", "3")
+                os.getenv("TEST_GENERATION_MAX_PROVIDER_RETRIES_PER_RUN", "15")
             ),
             "TEST_GENERATION_MAX_TOTAL_PROVIDER_CALLS": int(
-                os.getenv("TEST_GENERATION_MAX_TOTAL_PROVIDER_CALLS", "28")
+                os.getenv("TEST_GENERATION_MAX_TOTAL_PROVIDER_CALLS", "40")
             ),
             "TEST_GENERATION_MAX_COST_USD": os.getenv("TEST_GENERATION_MAX_COST_USD", "0.25"),
             "TESTING": False,

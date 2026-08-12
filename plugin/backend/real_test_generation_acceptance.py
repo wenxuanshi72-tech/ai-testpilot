@@ -456,7 +456,7 @@ def _limits(args: argparse.Namespace) -> AcceptanceLimits:
     if (
         args.max_calls < 0
         or not 0 <= args.max_corrections <= 8
-        or not 0 <= args.max_provider_retries <= 3
+        or not 0 <= args.max_provider_retries <= 15
     ):
         raise RealAcceptanceError("INVALID_CALL_OR_RETRY_LIMIT")
     return AcceptanceLimits(
@@ -548,7 +548,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--max-corrections", "--max-retries", dest="max_corrections", required=True, type=int
     )
-    parser.add_argument("--max-provider-retries", default=3, type=int)
+    parser.add_argument("--max-provider-retries", default=15, type=int)
     parser.add_argument("--budget-usd", required=True)
     parser.add_argument("--max-output-tokens", required=True, type=int)
     parser.add_argument("--project-id")

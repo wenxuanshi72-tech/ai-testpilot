@@ -189,7 +189,7 @@ class DeepSeekProvider:
             raise ProviderCallError("PROVIDER_NETWORK", retryable=True) from error
         latency_ms = round((time.perf_counter() - started) * 1000)
         if response.status_code >= 400:
-            retryable = response.status_code == 429 or response.status_code >= 500
+            retryable = response.status_code in {429, 500, 502, 503, 504}
             category = {
                 401: "PROVIDER_AUTHENTICATION",
                 402: "PROVIDER_BALANCE",

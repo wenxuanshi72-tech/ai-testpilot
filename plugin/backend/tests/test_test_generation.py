@@ -267,6 +267,21 @@ class OneTransientFailureProvider(MockLLMProvider):
         return super().generate_test_cases(**kwargs)
 
 
+class ScriptedNetworkFailureProvider(MockLLMProvider):
+    def __init__(self, failures_by_batch: dict[str, int]) -> None:
+        super().__init__()
+        self.remaining = dict(failures_by_batch)
+        self.attempts: dict[str, int] = {}
+
+    def generate_test_cases(self, **kwargs: Any) -> ProviderResponse:
+        batch = str(kwargs["batch_id"])
+        self.attempts[batch] = self.attempts.get(batch, 0) + 1
+        if self.remaining.get(batch, 0) > 0:
+            self.remaining[batch] -= 1
+            raise ProviderCallError("PROVIDER_NETWORK", retryable=True)
+        return super().generate_test_cases(**kwargs)
+
+
 def test_migration_has_phase5b_tables_but_no_phase6_tables(database: PluginDatabase) -> None:
     tables = {
         str(row["name"])
@@ -436,6 +451,58 @@ def test_transient_network_failure_is_retried_once_without_mock_fallback(
     assert provider.attempts == 14
     assert provider.call_count == 13
     assert _count(formal_database, "test_generation_llm_calls") == 14
+
+
+@pytest.mark.parametrize("failure_count", [1, 2, 3])
+def test_batch_recovers_after_up_to_three_network_failures(
+    formal_database: PluginDatabase,
+    failure_count: int,
+) -> None:
+    waits: list[float] = []
+    provider = ScriptedNetworkFailureProvider({"TGB-API-001": failure_count})
+    service = GenerationService(
+        formal_database,
+        provider_retry_wait=waits.append,
+        provider_retry_jitter=lambda: 0.5,
+    )
+    result = service.start(PROJECT_ID, provider, f"network-{failure_count}")
+    assert result.status == "validated_pending_review"
+    assert provider.attempts["TGB-API-001"] == failure_count + 1
+    assert waits == [2.5, 4.5, 8.5][:failure_count]
+
+
+def test_fourth_same_batch_network_failure_stops_without_infinite_retry(
+    formal_database: PluginDatabase,
+) -> None:
+    waits: list[float] = []
+    provider = ScriptedNetworkFailureProvider({"TGB-API-001": 4})
+    result = GenerationService(
+        formal_database,
+        provider_retry_wait=waits.append,
+        provider_retry_jitter=lambda: 0.0,
+    ).start(PROJECT_ID, provider, "network-four-failures")
+    assert result.status == "failed"
+    assert provider.attempts["TGB-API-001"] == 4
+    assert waits == [2.0, 4.0, 8.0]
+    assert _count(formal_database, "test_case_candidates") == 0
+
+
+def test_latest_real_network_pattern_recovers_and_continues_all_batches(
+    formal_database: PluginDatabase,
+) -> None:
+    provider = ScriptedNetworkFailureProvider(
+        {"TGB-API-001": 1, "TGB-API-003": 1, "TGB-API-006": 1, "TGB-UI-001": 1}
+    )
+    waits: list[float] = []
+    result = GenerationService(
+        formal_database,
+        provider_retry_wait=waits.append,
+        provider_retry_jitter=lambda: 0.0,
+    ).start(PROJECT_ID, provider, "latest-network-pattern")
+    assert result.status == "validated_pending_review"
+    assert waits == [2.0, 2.0, 2.0, 2.0]
+    assert provider.attempts["TGB-UI-001"] == 2
+    assert provider.call_count == 13
 
 
 def test_real_provider_without_key_is_blocked_without_mock_fallback(
@@ -642,6 +709,22 @@ def test_run_correction_budget_blocks_ninth_batch(
     counters = RunCallCounters(correction_call_count=8, total_provider_call_count=16)
     with pytest.raises(GenerationError, match="CORRECTION_BUDGET_EXCEEDED"):
         service._check_call_budget(result.run_id, "TGB-UI-002", 1, counters)
+
+
+def test_provider_retry_and_total_call_run_limits_are_enforced(
+    formal_database: PluginDatabase,
+) -> None:
+    service = GenerationService(formal_database)
+    result = service.start(PROJECT_ID, MockLLMProvider(), "provider-budget-source")
+    allowed = RunCallCounters(provider_retry_count=14, total_provider_call_count=39)
+    service._check_call_budget(result.run_id, "TGB-UI-001", 0, allowed)
+    with pytest.raises(GenerationError, match="CALL_BUDGET_EXCEEDED"):
+        service._check_call_budget(
+            result.run_id,
+            "TGB-UI-001",
+            0,
+            RunCallCounters(provider_retry_count=15, total_provider_call_count=40),
+        )
 
 
 def test_truncated_json_is_rejected_without_partial_promotion(

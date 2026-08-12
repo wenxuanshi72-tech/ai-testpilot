@@ -93,6 +93,37 @@ def test_deepseek_errors_are_typed_and_redacted(
     assert "do-not-expose" not in str(captured.value)
 
 
+@pytest.mark.parametrize(
+    ("status", "retryable"),
+    [
+        (400, False),
+        (401, False),
+        (403, False),
+        (404, False),
+        (429, True),
+        (500, True),
+        (502, True),
+        (503, True),
+        (504, True),
+        (505, False),
+    ],
+)
+def test_deepseek_http_retry_whitelist(
+    monkeypatch: pytest.MonkeyPatch, status: int, retryable: bool
+) -> None:
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "local-test-value")
+
+    class Response:
+        status_code = status
+        headers: dict[str, str] = {}
+
+    monkeypatch.setattr("plugin.backend.app.providers.httpx.post", lambda *_a, **_k: Response())
+    with pytest.raises(ProviderCallError) as captured:
+        _provider().analyze_outline("# PRD")
+    assert captured.value.http_status == status
+    assert captured.value.retryable is retryable
+
+
 def test_mock_provider_is_explicit_and_deterministic() -> None:
     provider = MockLLMProvider()
     assert provider.metadata.provider == "mock"

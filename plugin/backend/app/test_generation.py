@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import random
 import re
 import time
 from dataclasses import dataclass
@@ -66,9 +67,9 @@ EXPECTED_REQUIREMENT_COUNT = 19
 CASE_TYPES = ("api", "ui", "manual")
 MAX_CORRECTIONS_PER_BATCH = 1
 MAX_CORRECTIONS_PER_RUN = 8
-MAX_PROVIDER_RETRIES_PER_BATCH = 1
-MAX_PROVIDER_RETRIES_PER_RUN = 3
-MAX_TOTAL_PROVIDER_CALLS = 28
+MAX_PROVIDER_RETRIES_PER_BATCH = 3
+MAX_PROVIDER_RETRIES_PER_RUN = 15
+MAX_TOTAL_PROVIDER_CALLS = 40
 MAX_RUN_COST_USD = Decimal("0.25")
 APPROVED_API_STATUSES = {200, 201, 204, 400, 401, 403, 404, 405, 409, 413, 415, 422, 429, 500}
 RAW_CASE_KEYS = {
@@ -173,6 +174,7 @@ class TestGenerationService:
         max_total_provider_calls: int = MAX_TOTAL_PROVIDER_CALLS,
         max_run_cost_usd: Decimal | str = MAX_RUN_COST_USD,
         provider_retry_wait: Any = time.sleep,
+        provider_retry_jitter: Any = random.random,
     ) -> None:
         if not 1 <= max_requirements_per_batch <= 10:
             raise ValueError("max_requirements_per_batch must be between 1 and 10")
@@ -187,10 +189,10 @@ class TestGenerationService:
             raise ValueError("max_corrections_per_batch must be between 0 and 1")
         if not 0 <= max_corrections_per_run <= 8:
             raise ValueError("max_corrections_per_run must be between 0 and 8")
-        if not 0 <= max_provider_retries_per_batch <= 1:
-            raise ValueError("max_provider_retries_per_batch must be between 0 and 1")
-        if not 0 <= max_provider_retries_per_run <= 3:
-            raise ValueError("max_provider_retries_per_run must be between 0 and 3")
+        if not 0 <= max_provider_retries_per_batch <= 3:
+            raise ValueError("max_provider_retries_per_batch must be between 0 and 3")
+        if not 0 <= max_provider_retries_per_run <= 15:
+            raise ValueError("max_provider_retries_per_run must be between 0 and 15")
         if max_total_provider_calls < 1:
             raise ValueError("max_total_provider_calls must be positive")
         try:
@@ -214,6 +216,7 @@ class TestGenerationService:
         self.max_provider_retries_per_batch = max_provider_retries_per_batch
         self.max_provider_retries_per_run = max_provider_retries_per_run
         self.provider_retry_wait = provider_retry_wait
+        self.provider_retry_jitter = provider_retry_jitter
         self.max_total_provider_calls = max_total_provider_calls
         self.max_run_cost_microusd = int(
             (max_cost * Decimal(1_000_000)).quantize(Decimal("1"), rounding=ROUND_CEILING)
@@ -724,6 +727,9 @@ class TestGenerationService:
                             self._fail_batch(batch_id, correction_index, error.error_type)
                             raise
                         provider_retry_index += 1
+                        jitter = min(max(float(self.provider_retry_jitter()), 0.0), 1.0)
+                        delay_seconds = min(float(2**provider_retry_index), 8.0) + jitter
+                        delay_seconds = min(delay_seconds, 10.0)
                         self._audit(
                             run_id,
                             batch_id,
@@ -735,9 +741,11 @@ class TestGenerationService:
                                 "batch_provider_retry_count": provider_retry_index,
                                 "run_provider_retry_count": counters.provider_retry_count + 1,
                                 "total_provider_call_count": counters.total_provider_call_count,
+                                "delay_seconds": delay_seconds,
+                                "jitter_seconds": jitter,
                             },
                         )
-                        self.provider_retry_wait(1.0)
+                        self.provider_retry_wait(delay_seconds)
                 parsed = parse_json_object(response)
                 call_id = self._persist_call(
                     run_id,

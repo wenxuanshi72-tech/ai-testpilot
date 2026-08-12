@@ -18,6 +18,7 @@ from plugin.backend.app.test_intent_compiler import (
     TestIntentCompilationError,
     compatibility_audit_records,
     normalize_intent_batch,
+    structured_setup_to_api,
 )
 from plugin.backend.app.test_intent_contract import validate_test_intent_prompt_contract
 from plugin.backend.app.test_intent_schemas import TestIntentSchemas
@@ -92,7 +93,7 @@ def test_compatibility_accepts_authorization_and_nullable_test_data_with_audit()
             "original": "authorization",
             "accepted_as": "security",
             "rule": "authorization_to_security",
-            "compatibility_version": "test-intent-compatibility@1.28.0",
+            "compatibility_version": "test-intent-compatibility@1.29.0",
         },
         {
             "generation_slot_id": intent["generation_slot_id"],
@@ -100,7 +101,7 @@ def test_compatibility_accepts_authorization_and_nullable_test_data_with_audit()
             "original_type": "null",
             "accepted_type": "null",
             "rule": "nullable_test_data_value",
-            "compatibility_version": "test-intent-compatibility@1.28.0",
+            "compatibility_version": "test-intent-compatibility@1.29.0",
         },
     ]
 
@@ -120,7 +121,7 @@ def test_functional_scenario_is_preserved_as_candidate_category() -> None:
             "original": "functional",
             "accepted_as": "functional",
             "rule": "functional_category_passthrough",
-            "compatibility_version": "test-intent-compatibility@1.28.0",
+            "compatibility_version": "test-intent-compatibility@1.29.0",
         }
     ]
 
@@ -151,7 +152,7 @@ def test_session_semantics_aliases_compile_to_anonymous_with_audit() -> None:
                 "original": alias,
                 "accepted_as": "anonymous",
                 "rule": "descriptive_session_to_canonical",
-                "compatibility_version": "test-intent-compatibility@1.28.0",
+                "compatibility_version": "test-intent-compatibility@1.29.0",
             }
         ]
 
@@ -196,6 +197,63 @@ def test_structural_compatibility_normalizes_real_response_shape_with_audit() ->
     }
     assert raw["type_intent"].get("request_body") is None
     assert "request_body" not in raw["type_intent"]
+
+
+def test_non_http_na_setup_becomes_instruction_and_preserves_semantics() -> None:
+    raw = _example("api")
+    raw["type_intent"]["setup_semantics"] = [
+        {
+            "method": "N/A",
+            "path": "N/A",
+            "expected_status": 0,
+            "session_semantics": "expired",
+            "response_expectations": ["Expire the session server-side."],
+            "security_expectations": [],
+            "state_expectations": ["Session is expired."],
+        }
+    ]
+    normalized = normalize_intent_batch({"intents": [raw]})
+    setup = normalized["intents"][0]["type_intent"]["setup_semantics"][0]
+    assert isinstance(setup, str)
+    assert "Expire the session server-side" in setup
+    assert "Session is expired" in setup
+    TestIntentSchemas().validate("api_intent_batch.schema.json", normalized)
+    assert any(
+        item["rule"] == "non_http_setup_to_instruction"
+        for item in compatibility_audit_records([raw])
+    )
+
+
+def test_real_http_setup_with_na_path_remains_invalid() -> None:
+    assert (
+        structured_setup_to_api(
+            {"method": "POST", "path": "N/A", "expected_status": 201, "description": "x"}
+        )
+        is None
+    )
+    raw = _example("api")
+    raw["type_intent"]["setup_semantics"] = [
+        {"method": "POST", "path": "N/A", "expected_status": 201, "description": "x"}
+    ]
+    normalized = normalize_intent_batch({"intents": [raw]})
+    with pytest.raises(ValidationError):
+        TestIntentSchemas().validate("api_intent_batch.schema.json", normalized)
+
+
+def test_unmapped_setup_extension_is_not_silently_dropped() -> None:
+    raw = _example("api")
+    raw["type_intent"]["setup_semantics"] = [
+        {
+            "method": "POST",
+            "path": "/api/auth/login",
+            "expected_status": 200,
+            "description": "Login",
+            "outcome_capture": {"variable_name": "session"},
+        }
+    ]
+    normalized = normalize_intent_batch({"intents": [raw]})
+    with pytest.raises(ValidationError):
+        TestIntentSchemas().validate("api_intent_batch.schema.json", normalized)
 
 
 def test_descriptive_session_and_action_setup_are_deterministically_normalized() -> None:
@@ -304,7 +362,7 @@ def test_missing_cleanup_is_normalized_to_audited_no_cleanup() -> None:
             "original_type": "missing",
             "accepted_type": "no_cleanup",
             "rule": "missing_cleanup_to_no_cleanup",
-            "compatibility_version": "test-intent-compatibility@1.28.0",
+            "compatibility_version": "test-intent-compatibility@1.29.0",
         }
     ]
 
@@ -326,7 +384,7 @@ def test_quality_scenario_is_normalized_to_audited_functional() -> None:
             "original": "quality",
             "accepted_as": "functional",
             "rule": "model_functional_alias_to_functional",
-            "compatibility_version": "test-intent-compatibility@1.28.0",
+            "compatibility_version": "test-intent-compatibility@1.29.0",
         }
     ]
 
@@ -376,7 +434,7 @@ def test_model_functional_aliases_are_audited(alias: str) -> None:
             "original": alias,
             "accepted_as": "functional",
             "rule": "model_functional_alias_to_functional",
-            "compatibility_version": "test-intent-compatibility@1.28.0",
+            "compatibility_version": "test-intent-compatibility@1.29.0",
         }
     ]
 
@@ -404,7 +462,9 @@ def test_error_handling_and_structured_setup_are_projected_deterministically() -
             "path": "/api/auth/login",
             "request_body": {"username": "${data_001}"},
             "expected_status": 200,
-            "description": "POST /api/auth/login",
+            "description": (
+                "POST /api/auth/login; session=create_new; response_expectations=Login succeeds"
+            ),
         }
     ]
     TestIntentSchemas().validate("api_intent_batch.schema.json", normalized)

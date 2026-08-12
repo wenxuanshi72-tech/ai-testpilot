@@ -12,8 +12,8 @@ from plugin.backend.app.providers import ProviderMetadata
 from plugin.backend.app.test_generation_prompts import TEST_GENERATION_PROMPT_VERSION
 from plugin.backend.app.test_generation_schemas import TEST_CASE_SCHEMA_VERSION, TestCaseSchemas
 
-TEST_INTENT_COMPILER_VERSION = "deterministic-candidate-compiler@2.29.0"
-TEST_INTENT_COMPATIBILITY_VERSION = "test-intent-compatibility@1.28.0"
+TEST_INTENT_COMPILER_VERSION = "deterministic-candidate-compiler@2.30.0"
+TEST_INTENT_COMPATIBILITY_VERSION = "test-intent-compatibility@1.29.0"
 SCENARIO_TO_CATEGORY = {
     "positive": "positive",
     "negative": "negative",
@@ -124,16 +124,75 @@ def structured_setup_to_api(setup: dict[str, Any]) -> dict[str, Any] | None:
         or not isinstance(expected_status, int)
     ):
         return None
+    allowed = {
+        "method",
+        "path",
+        "request_body",
+        "request_headers",
+        "expected_status",
+        "description",
+        "session_semantics",
+        "response_expectations",
+        "security_expectations",
+        "state_expectations",
+    }
+    if set(setup) - allowed:
+        return None
     description = setup.get("description")
+    semantic_parts = [
+        f"session={setup['session_semantics']}"
+        if isinstance(setup.get("session_semantics"), str)
+        else "",
+        *[
+            f"{field}=" + "; ".join(value)
+            for field in ("response_expectations", "security_expectations", "state_expectations")
+            if isinstance((value := setup.get(field)), list)
+            and value
+            and all(isinstance(item, str) for item in value)
+        ],
+    ]
+    base = (
+        description if isinstance(description, str) and description else f"{method.upper()} {path}"
+    )
+    rendered = "; ".join([base, *(part for part in semantic_parts if part)])
     return {
         "method": method.upper(),
         "path": path,
         "request_body": setup.get("request_body"),
         "expected_status": expected_status,
-        "description": description
-        if isinstance(description, str) and description
-        else f"{method.upper()} {path}",
+        "description": rendered[:300],
     }
+
+
+def descriptive_setup_to_instruction(setup: dict[str, Any]) -> str | None:
+    if setup.get("method") != "N/A" or setup.get("path") not in {"N/A", ""}:
+        return None
+    allowed = {
+        "method",
+        "path",
+        "request_body",
+        "expected_status",
+        "description",
+        "session_semantics",
+        "response_expectations",
+        "security_expectations",
+        "state_expectations",
+    }
+    if set(setup) - allowed or setup.get("request_body") not in {None, ""}:
+        return None
+    parts: list[str] = []
+    description = setup.get("description")
+    if isinstance(description, str) and description.strip() not in {"", "N/A N/A"}:
+        parts.append(description.strip())
+    for field in ("response_expectations", "security_expectations", "state_expectations"):
+        value = setup.get(field)
+        if isinstance(value, list) and all(isinstance(item, str) for item in value):
+            parts.extend(item.strip() for item in value if item.strip())
+    session = setup.get("session_semantics")
+    if isinstance(session, str) and session:
+        parts.append(f"session semantics: {session}")
+    result = "; ".join(dict.fromkeys(parts))
+    return result[:600] if result else None
 
 
 def incomplete_setup_to_instruction(setup: dict[str, Any]) -> str | None:
@@ -474,6 +533,7 @@ def compatibility_audit_records(intents: list[dict[str, Any]]) -> list[dict[str,
                     )
                     is_action_api = action_setup_to_api(setup) is not None
                     is_incomplete_api = incomplete_setup_to_instruction(setup) is not None
+                    is_descriptive = descriptive_setup_to_instruction(setup) is not None
                     records.append(
                         {
                             "generation_slot_id": slot_id,
@@ -481,11 +541,13 @@ def compatibility_audit_records(intents: list[dict[str, Any]]) -> list[dict[str,
                             "original_type": "object",
                             "accepted_type": (
                                 "setup_instruction"
-                                if is_action_instruction or is_incomplete_api
+                                if is_action_instruction or is_incomplete_api or is_descriptive
                                 else "setup_api_request"
                             ),
                             "rule": (
-                                "incomplete_setup_to_instruction"
+                                "non_http_setup_to_instruction"
+                                if is_descriptive
+                                else "incomplete_setup_to_instruction"
                                 if is_incomplete_api
                                 else (
                                     "action_instruction_setup_to_text"
@@ -855,17 +917,21 @@ def normalize_intent_batch(parsed: dict[str, Any]) -> dict[str, Any]:
                     and "path" in setup
                     and not isinstance(setup.get("when"), str)
                 ):
+                    if setup.get("method") == "N/A" and setup.get("path") == "N/A":
+                        setup["path"] = ""
                     setup.setdefault("expected_status", 0)
                     fallback = f"{setup['method']} {setup['path']}"
                     setup.setdefault("description", str(setup.get("action") or fallback))
                     setup.pop("action", None)
-                converted = (
-                    action_setup_to_api(setup) or structured_setup_to_api(setup)
+                normalized_setup = (
+                    descriptive_setup_to_instruction(setup)
+                    or action_setup_to_api(setup)
+                    or structured_setup_to_api(setup)
                     if isinstance(setup, dict)
                     else None
                 )
-                if converted is not None:
-                    details["setup_semantics"][index] = converted
+                if normalized_setup is not None:
+                    details["setup_semantics"][index] = normalized_setup
                 elif isinstance(setup, dict) and incomplete_setup_to_instruction(setup):
                     details["setup_semantics"][index] = incomplete_setup_to_instruction(setup)
                 elif (

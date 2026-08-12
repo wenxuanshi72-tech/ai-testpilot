@@ -53,3 +53,23 @@ def test_prompt_examples_compile_to_complete_candidate_schema() -> None:
         )
         candidate_schemas.validate("test_case_candidate.schema.json", candidate)
         assert candidate["case_type"] == case_type
+
+
+def test_api_setup_prompt_contract_is_derived_from_current_schema() -> None:
+    prompts = TestGenerationPromptRegistry()
+    setup = TestIntentSchemas().schemas["test_intent.schema.json"]["$defs"]["setup_api_request"]
+    messages = prompts.generation_messages(
+        case_type="api",
+        batch_id="TGB-API-001",
+        generation_run_id="TGR-" + ("0" * 32),
+        provider_mode="real",
+        generation_slots=[],
+        max_cases=1,
+        recovery=True,
+        validation_error="INTENT_SCHEMA_VALIDATION",
+    )
+    rendered = "\n".join(item["content"] for item in messages)
+    assert "required=" + ",".join(setup["required"]) in rendered
+    assert "allowed=" + ",".join(setup["properties"]) in rendered
+    assert "path_pattern=" + setup["properties"]["path"]["pattern"] in rendered
+    assert "path!=N/A" in rendered

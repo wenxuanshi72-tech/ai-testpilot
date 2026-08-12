@@ -32,8 +32,18 @@ class TestGenerationPromptRegistry:
         }
         schema = TestIntentSchemas().schemas["test_intent.schema.json"]
         api_properties = schema["$defs"]["api_intent"]["properties"]
+        setup = schema["$defs"]["setup_api_request"]
         self.api_methods = tuple(api_properties["method"]["enum"])
         self.api_sessions = tuple(api_properties["session_semantics"]["enum"])
+        self.api_setup_contract = (
+            "setup=string|object;"
+            f"required={','.join(setup['required'])};"
+            f"allowed={','.join(setup['properties'])};"
+            f"method={','.join(setup['properties']['method']['enum'])};"
+            f"path_pattern={setup['properties']['path']['pattern']};"
+            f"additionalProperties={str(setup['additionalProperties']).lower()};"
+            "non-HTTP=>string;path!=N/A."
+        )
 
     @property
     def content_hash(self) -> str:
@@ -89,7 +99,8 @@ class TestGenerationPromptRegistry:
                     "setup_semantics; keep cleanup_intent; remove sequence. "
                     "method={{api_methods}}; "
                     "session_semantics={{api_sessions}}. Never guess by position or emit "
-                    "sequence/complex/empty/null method, null status, or sequence session."
+                    "sequence/complex/empty/null method, null status, or sequence session. "
+                    "Obey the setup contract in the API system message exactly."
                 )
             recovery_content = recovery_content.replace("{{type_recovery_rules}}", type_rules)
             recovery_content = self._replace_api_contract_values(recovery_content)
@@ -115,6 +126,8 @@ class TestGenerationPromptRegistry:
         return TEST_INTENT_SCHEMA_VERSION
 
     def _replace_api_contract_values(self, content: str) -> str:
-        return content.replace("{{api_methods}}", ", ".join(self.api_methods)).replace(
-            "{{api_sessions}}", ", ".join(self.api_sessions)
+        return (
+            content.replace("{{api_methods}}", ", ".join(self.api_methods))
+            .replace("{{api_sessions}}", ", ".join(self.api_sessions))
+            .replace("{{api_setup_contract}}", self.api_setup_contract)
         )

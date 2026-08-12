@@ -37,7 +37,6 @@ from plugin.backend.app.test_generation_schemas import (
     TEST_CASE_SCHEMA_VERSION,
     TestCaseSchemas,
 )
-from plugin.backend.app.test_intent_compiler import TEST_INTENT_COMPILER_VERSION
 from plugin.backend.app.test_intent_schemas import (
     TEST_INTENT_SCHEMA_VERSION,
 )
@@ -225,12 +224,13 @@ def build_dry_run_report(
     plan = service.preflight(project_id)
     snapshots = service._load_requirement_snapshots(project_id)
     capacities = capacity_report_for_plan(plan, snapshots, service.prompts)
-    reusable_batch_keys = _reusable_batch_keys(
-        database,
+    reusable_batch_keys, checkpoint_rejections = _reusable_batch_keys(
+        service,
         resume_run_id=resume_run_id,
         requirement_snapshot_hash=plan["requirement_snapshot_hash"],
         batches=plan["batches"],
-        prompt_hash=service.prompts.content_hash,
+        snapshots=snapshots,
+        provider_metadata=ProviderMetadata("deepseek", "deepseek-v4-pro", "real"),
     )
     pending_capacities = [
         item for item in capacities if item["batch_key"] not in reusable_batch_keys
@@ -267,6 +267,7 @@ def build_dry_run_report(
         "total_batch_count": len(plan["batches"]),
         "reusable_batch_count": len(reusable_batch_keys),
         "reusable_batch_keys": sorted(reusable_batch_keys),
+        "checkpoint_rejections": checkpoint_rejections,
         "planned_call_count": reservation["initial_call_count"],
         "max_calls": limits.max_calls,
         "max_retries": limits.max_retries,
@@ -285,15 +286,17 @@ def build_dry_run_report(
 
 
 def _reusable_batch_keys(
-    database: PluginDatabase,
+    service: TestGenerationService,
     *,
     resume_run_id: str | None,
     requirement_snapshot_hash: str,
     batches: list[dict[str, Any]],
-    prompt_hash: str,
-) -> set[str]:
+    snapshots: dict[str, dict[str, Any]],
+    provider_metadata: ProviderMetadata,
+) -> tuple[set[str], dict[str, str]]:
     if resume_run_id is None:
-        return set()
+        return set(), {}
+    database = service.database
     table = database.fetch_one(
         "SELECT COUNT(*) AS count FROM sqlite_master "
         "WHERE type='table' AND name='test_generation_runs'"
@@ -317,36 +320,20 @@ def _reusable_batch_keys(
     ):
         raise RealAcceptanceError("RESUME_RUN_INCOMPATIBLE")
     reusable: set[str] = set()
-    for batch in batches:
-        row = database.fetch_one(
-            "SELECT b.batch_key FROM test_generation_batches b "
-            "JOIN test_generation_llm_calls c ON c.test_generation_batch_id="
-            "b.test_generation_batch_id "
-            "LEFT JOIN test_generation_call_validation_outcomes v "
-            "ON v.test_generation_llm_call_id=c.test_generation_llm_call_id "
-            "AND v.outcome_origin='runtime' "
-            "WHERE b.test_generation_run_id=:run AND b.input_hash=:input_hash "
-            "AND b.status='validated' "
-            "AND (v.validation_status='valid' OR "
-            "(v.test_generation_llm_call_id IS NULL AND c.validation_status='valid')) "
-            "AND c.prompt_hash=:prompt_hash AND c.schema_version=:schema_version "
-            "AND EXISTS (SELECT 1 FROM test_case_generation_audit_events e "
-            "WHERE e.test_generation_run_id=b.test_generation_run_id "
-            "AND e.test_generation_batch_id=b.test_generation_batch_id "
-            "AND e.event_type='intent_batch_compiled' "
-            "AND json_extract(e.details_json,'$.compiler_version')=:compiler_version) "
-            "LIMIT 1",
-            {
-                "run": resume_run_id,
-                "input_hash": batch["input_hash"],
-                "prompt_hash": prompt_hash,
-                "schema_version": TEST_INTENT_SCHEMA_VERSION,
-                "compiler_version": TEST_INTENT_COMPILER_VERSION,
-            },
+    rejections: dict[str, str] = {}
+    planned = {item.batch_key: item for item in service._plan_batches({"batches": batches})}
+    for batch_key, batch in planned.items():
+        qualification = service.qualify_checkpoint(
+            resume_run_id=resume_run_id,
+            batch=batch,
+            snapshots=[snapshots[item] for item in batch.requirement_ids],
+            provider_metadata=provider_metadata,
         )
-        if row:
-            reusable.add(str(batch["batch_key"]))
-    return reusable
+        if qualification.reusable:
+            reusable.add(batch_key)
+        else:
+            rejections[batch_key] = qualification.rejection_reason or "CHECKPOINT_REJECTED"
+    return reusable, rejections
 
 
 def _execute(args: argparse.Namespace, database: PluginDatabase, project_id: str) -> int:

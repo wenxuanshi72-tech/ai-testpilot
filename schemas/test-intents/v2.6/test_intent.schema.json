@@ -1,0 +1,385 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-testpilot.local/schemas/test-intents/v2.6/test_intent.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "generation_slot_id",
+    "title",
+    "objective",
+    "priority",
+    "risk_level",
+    "scenario_type",
+    "preconditions",
+    "test_data",
+    "actions",
+    "expected_outcomes",
+    "cleanup_intent",
+    "tags",
+    "type_intent"
+  ],
+  "properties": {
+    "generation_slot_id": {
+      "type": "string",
+      "pattern": "^GSL-(API|UI|MAN)-[A-F0-9]{16}$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 180
+    },
+    "objective": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 1000
+    },
+    "priority": {
+      "enum": ["P0", "P1", "P2", "P3"]
+    },
+    "risk_level": {
+      "enum": ["critical", "high", "medium", "low"]
+    },
+    "scenario_type": {
+      "enum": [
+        "positive",
+        "negative",
+        "boundary",
+        "security",
+        "authorization",
+        "functional",
+        "accessibility",
+        "recovery"
+      ]
+    },
+    "preconditions": {
+      "$ref": "#/$defs/text_list"
+    },
+    "test_data": {
+      "type": "array",
+      "maxItems": 30,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["description", "value", "sensitive", "classification"],
+        "properties": {
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "value": {
+            "type": ["string", "null"],
+            "maxLength": 1000
+          },
+          "sensitive": {
+            "type": "boolean"
+          },
+          "classification": {
+            "type": ["string", "null"],
+            "enum": [null, "credential", "token", "cookie", "personal", "confidential"]
+          }
+        }
+      }
+    },
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 40,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action", "instruction"],
+        "properties": {
+          "action": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 60
+          },
+          "instruction": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 600
+          }
+        }
+      }
+    },
+    "expected_outcomes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": {
+        "type": "string",
+        "minLength": 3,
+        "maxLength": 600
+      }
+    },
+    "cleanup_intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "instructions"],
+      "properties": {
+        "required": {
+          "type": "boolean"
+        },
+        "instructions": {
+          "$ref": "#/$defs/text_list"
+        }
+      }
+    },
+    "tags": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+      }
+    },
+    "type_intent": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/api_intent"
+        },
+        {
+          "$ref": "#/$defs/ui_intent"
+        },
+        {
+          "$ref": "#/$defs/manual_intent"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "text_list": {
+      "type": "array",
+      "maxItems": 30,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 600
+      }
+    },
+    "api_intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "path",
+        "request_body",
+        "session_semantics",
+        "expected_status",
+        "response_expectations",
+        "security_expectations",
+        "state_expectations",
+        "setup_semantics"
+      ],
+      "properties": {
+        "method": {
+          "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^/[A-Za-z0-9_./{}-]*$",
+          "maxLength": 240
+        },
+        "request_body": {
+          "type": ["object", "null"]
+        },
+        "request_headers": {
+          "type": "object",
+          "maxProperties": 20,
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 300
+          }
+        },
+        "session_semantics": {
+          "enum": [
+            "anonymous",
+            "no_session",
+            "none_or_invalid",
+            "create_new",
+            "authenticated",
+            "expired",
+            "revoked"
+          ]
+        },
+        "expected_status": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 599
+        },
+        "response_expectations": {
+          "$ref": "#/$defs/text_list"
+        },
+        "security_expectations": {
+          "$ref": "#/$defs/text_list"
+        },
+        "state_expectations": {
+          "$ref": "#/$defs/text_list"
+        },
+        "setup_semantics": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 600
+              },
+              {
+                "$ref": "#/$defs/setup_api_request"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "locator_intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "value"],
+      "properties": {
+        "strategy": {
+          "enum": ["role", "label", "name", "test-id", "placeholder"]
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      }
+    },
+    "ui_intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "route",
+        "viewport_intent",
+        "locator_intents",
+        "user_actions",
+        "visible_assertions",
+        "url_assertions",
+        "session_assertions",
+        "network_assertions",
+        "evidence_intent"
+      ],
+      "properties": {
+        "route": {
+          "type": "string",
+          "pattern": "^/[A-Za-z0-9_./{}-]*$",
+          "maxLength": 240
+        },
+        "viewport_intent": {
+          "enum": ["desktop", "tablet", "mobile", "responsive-matrix"]
+        },
+        "locator_intents": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/$defs/locator_intent"
+          }
+        },
+        "user_actions": {
+          "$ref": "#/$defs/text_list"
+        },
+        "visible_assertions": {
+          "$ref": "#/$defs/text_list"
+        },
+        "url_assertions": {
+          "$ref": "#/$defs/text_list"
+        },
+        "session_assertions": {
+          "$ref": "#/$defs/text_list"
+        },
+        "network_assertions": {
+          "$ref": "#/$defs/text_list"
+        },
+        "evidence_intent": {
+          "const": "deferred_no_capture"
+        }
+      }
+    },
+    "manual_intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "environment",
+        "tester_instructions",
+        "visual_checkpoints",
+        "accessibility_checkpoints",
+        "expected_observations",
+        "evidence_recommendation"
+      ],
+      "properties": {
+        "environment": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 400
+        },
+        "tester_instructions": {
+          "$ref": "#/$defs/text_list"
+        },
+        "visual_checkpoints": {
+          "$ref": "#/$defs/text_list"
+        },
+        "accessibility_checkpoints": {
+          "$ref": "#/$defs/text_list"
+        },
+        "expected_observations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 600
+          }
+        },
+        "evidence_recommendation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        }
+      }
+    },
+    "setup_api_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "path", "expected_status", "description"],
+      "properties": {
+        "method": {
+          "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^/[A-Za-z0-9_./{}-]*$",
+          "maxLength": 240
+        },
+        "request_body": {
+          "type": ["object", "null"]
+        },
+        "request_headers": {
+          "type": "object",
+          "maxProperties": 20,
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 300
+          }
+        },
+        "expected_status": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 599
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-testpilot.local/schemas/test-cases/v1.2/test_case_candidate.schema.json",
+  "title": "AI TestPilot candidate test case 1.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "case_id",
+    "case_version",
+    "case_type",
+    "title",
+    "objective",
+    "requirement_ids",
+    "priority",
+    "risk_level",
+    "test_level",
+    "test_category",
+    "preconditions",
+    "test_data",
+    "steps",
+    "expected_results",
+    "cleanup",
+    "tags",
+    "source",
+    "generation_run_id",
+    "review_status",
+    "lifecycle_status",
+    "created_at",
+    "content_hash",
+    "trace",
+    "type_details"
+  ],
+  "properties": {
+    "schema_version": { "const": "test-cases@1.2.0" },
+    "case_id": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/case_id"
+    },
+    "case_version": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/case_version"
+    },
+    "case_type": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/case_type"
+    },
+    "title": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/title"
+    },
+    "objective": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/objective"
+    },
+    "requirement_ids": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/requirement_ids"
+    },
+    "priority": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/priority"
+    },
+    "risk_level": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/risk_level"
+    },
+    "test_level": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/test_level"
+    },
+    "test_category": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/test_category"
+    },
+    "preconditions": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/preconditions"
+    },
+    "test_data": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/test_data"
+    },
+    "steps": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/steps"
+    },
+    "expected_results": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/expected_results"
+    },
+    "cleanup": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/cleanup"
+    },
+    "tags": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/tags"
+    },
+    "source": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/source"
+    },
+    "generation_run_id": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/generation_run_id"
+    },
+    "review_status": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/review_status"
+    },
+    "lifecycle_status": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/lifecycle_status"
+    },
+    "created_at": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/created_at"
+    },
+    "content_hash": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/content_hash"
+    },
+    "type_details": {
+      "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/properties/type_details"
+    },
+    "trace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "project_id",
+        "prd_document_id",
+        "prd_version_id",
+        "requirements",
+        "generation_prompt_version",
+        "generation_schema_version",
+        "provider_mode",
+        "model"
+      ],
+      "properties": {
+        "project_id": {
+          "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/$defs/trace/properties/project_id"
+        },
+        "prd_document_id": {
+          "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/$defs/trace/properties/prd_document_id"
+        },
+        "prd_version_id": {
+          "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/$defs/trace/properties/prd_version_id"
+        },
+        "requirements": {
+          "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/$defs/trace/properties/requirements"
+        },
+        "generation_prompt_version": { "const": "test-generation@2.0.0" },
+        "generation_schema_version": { "const": "test-cases@1.2.0" },
+        "provider_mode": {
+          "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/$defs/trace/properties/provider_mode"
+        },
+        "model": {
+          "$ref": "https://ai-testpilot.local/schemas/test-cases/v1/test_case_candidate.schema.json#/$defs/trace/properties/model"
+        }
+      }
+    }
+  }
+}

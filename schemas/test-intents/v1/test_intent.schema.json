@@ -1,0 +1,255 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-testpilot.local/schemas/test-intents/v1/test_intent.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "intent_id",
+    "case_type",
+    "title",
+    "objective",
+    "requirement_ids",
+    "priority",
+    "risk_level",
+    "scenario_type",
+    "preconditions",
+    "test_data",
+    "actions",
+    "expected_outcomes",
+    "cleanup_intent",
+    "tags",
+    "type_intent"
+  ],
+  "properties": {
+    "intent_id": { "type": "string", "pattern": "^INT-(API|UI|MAN)-[A-Z0-9][A-Z0-9-]{2,80}$" },
+    "case_type": { "enum": ["api", "ui", "manual"] },
+    "title": { "type": "string", "minLength": 5, "maxLength": 180 },
+    "objective": { "type": "string", "minLength": 10, "maxLength": 1000 },
+    "requirement_ids": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 12,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^REQ-[A-Z0-9-]+$" }
+    },
+    "priority": { "enum": ["P0", "P1", "P2", "P3"] },
+    "risk_level": { "enum": ["critical", "high", "medium", "low"] },
+    "scenario_type": {
+      "enum": ["positive", "negative", "boundary", "security", "accessibility", "recovery"]
+    },
+    "preconditions": { "$ref": "#/$defs/text_list" },
+    "test_data": {
+      "type": "array",
+      "maxItems": 30,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "source", "value", "sensitive", "classification"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
+          "source": { "enum": ["literal", "fixture", "generated", "environment"] },
+          "value": { "type": ["string", "number", "boolean", "null"] },
+          "sensitive": { "type": "boolean" },
+          "classification": {
+            "type": ["string", "null"],
+            "enum": [null, "credential", "token", "cookie", "personal", "confidential"]
+          }
+        }
+      }
+    },
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 40,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action", "instruction"],
+        "properties": {
+          "action": { "type": "string", "minLength": 2, "maxLength": 60 },
+          "instruction": { "type": "string", "minLength": 3, "maxLength": 600 }
+        }
+      }
+    },
+    "expected_outcomes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": { "type": "string", "minLength": 3, "maxLength": 600 }
+    },
+    "cleanup_intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "instructions"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "instructions": { "$ref": "#/$defs/text_list" }
+      }
+    },
+    "tags": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,39}$" }
+    },
+    "type_intent": {
+      "oneOf": [
+        { "$ref": "#/$defs/api_intent" },
+        { "$ref": "#/$defs/ui_intent" },
+        { "$ref": "#/$defs/manual_intent" }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "case_type": { "const": "api" } } },
+      "then": {
+        "properties": {
+          "intent_id": { "pattern": "^INT-API-" },
+          "type_intent": { "$ref": "#/$defs/api_intent" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "case_type": { "const": "ui" } } },
+      "then": {
+        "properties": {
+          "intent_id": { "pattern": "^INT-UI-" },
+          "type_intent": { "$ref": "#/$defs/ui_intent" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "case_type": { "const": "manual" } } },
+      "then": {
+        "properties": {
+          "intent_id": { "pattern": "^INT-MAN-" },
+          "type_intent": { "$ref": "#/$defs/manual_intent" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "text_list": {
+      "type": "array",
+      "maxItems": 30,
+      "items": { "type": "string", "minLength": 1, "maxLength": 600 }
+    },
+    "request_intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path_parameters", "query_parameters", "body"],
+      "properties": {
+        "path_parameters": { "type": "object" },
+        "query_parameters": { "type": "object" },
+        "body": { "type": ["object", "null"] }
+      }
+    },
+    "assertion_intents": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["response", "schema", "security", "state"],
+      "properties": {
+        "response": { "$ref": "#/$defs/text_list" },
+        "schema": { "$ref": "#/$defs/text_list" },
+        "security": { "$ref": "#/$defs/text_list" },
+        "state": { "$ref": "#/$defs/text_list" }
+      }
+    },
+    "api_intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "path",
+        "request_intent",
+        "session_intent",
+        "expected_status",
+        "assertion_intents",
+        "setup_intents"
+      ],
+      "properties": {
+        "method": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"] },
+        "path": { "type": "string", "pattern": "^/[A-Za-z0-9_./{}-]*$", "maxLength": 240 },
+        "request_intent": { "$ref": "#/$defs/request_intent" },
+        "session_intent": {
+          "enum": [
+            "none",
+            "new_session",
+            "reuse_isolated_session",
+            "expired_session",
+            "revoked_session"
+          ]
+        },
+        "expected_status": { "type": "integer", "minimum": 100, "maximum": 599 },
+        "assertion_intents": { "$ref": "#/$defs/assertion_intents" },
+        "setup_intents": { "$ref": "#/$defs/text_list" }
+      }
+    },
+    "locator_intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "value"],
+      "properties": {
+        "strategy": { "enum": ["role", "label", "name", "test-id", "placeholder"] },
+        "value": { "type": "string", "minLength": 1, "maxLength": 160 }
+      }
+    },
+    "ui_intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "route",
+        "viewport_intent",
+        "locator_intents",
+        "user_actions",
+        "visible_assertions",
+        "url_assertions",
+        "session_assertions",
+        "network_assertions",
+        "evidence_intent"
+      ],
+      "properties": {
+        "route": { "type": "string", "pattern": "^/[A-Za-z0-9_./{}-]*$", "maxLength": 240 },
+        "viewport_intent": { "enum": ["desktop", "tablet", "mobile", "responsive-matrix"] },
+        "locator_intents": {
+          "type": "array",
+          "maxItems": 20,
+          "items": { "$ref": "#/$defs/locator_intent" }
+        },
+        "user_actions": { "$ref": "#/$defs/text_list" },
+        "visible_assertions": { "$ref": "#/$defs/text_list" },
+        "url_assertions": { "$ref": "#/$defs/text_list" },
+        "session_assertions": { "$ref": "#/$defs/text_list" },
+        "network_assertions": { "$ref": "#/$defs/text_list" },
+        "evidence_intent": { "const": "deferred_no_capture" }
+      }
+    },
+    "manual_intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "environment",
+        "tester_instructions",
+        "visual_checkpoints",
+        "accessibility_checkpoints",
+        "expected_observations",
+        "evidence_recommendation"
+      ],
+      "properties": {
+        "environment": { "type": "string", "minLength": 1, "maxLength": 400 },
+        "tester_instructions": { "$ref": "#/$defs/text_list" },
+        "visual_checkpoints": { "$ref": "#/$defs/text_list" },
+        "accessibility_checkpoints": { "$ref": "#/$defs/text_list" },
+        "expected_observations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": { "type": "string", "minLength": 3, "maxLength": 600 }
+        },
+        "evidence_recommendation": { "type": "string", "minLength": 1, "maxLength": 500 }
+      }
+    }
+  }
+}

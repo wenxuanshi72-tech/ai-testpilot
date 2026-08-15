@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-testpilot.local/schemas/test-cases/v1.7/raw_test_case_candidate.schema.json",
+  "title": "Model-owned raw candidate field contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "case_id",
+    "title",
+    "objective",
+    "requirement_ids",
+    "priority",
+    "risk_level",
+    "test_level",
+    "test_category",
+    "preconditions",
+    "test_data",
+    "steps",
+    "expected_results",
+    "cleanup",
+    "tags",
+    "type_details"
+  ],
+  "properties": {
+    "case_id": {
+      "$ref": "test_case_candidate.schema.json#/properties/case_id"
+    },
+    "title": {
+      "$ref": "test_case_candidate.schema.json#/properties/title"
+    },
+    "objective": {
+      "$ref": "test_case_candidate.schema.json#/properties/objective"
+    },
+    "requirement_ids": {
+      "$ref": "test_case_candidate.schema.json#/properties/requirement_ids"
+    },
+    "priority": {
+      "$ref": "test_case_candidate.schema.json#/properties/priority"
+    },
+    "risk_level": {
+      "$ref": "test_case_candidate.schema.json#/properties/risk_level"
+    },
+    "test_level": {
+      "$ref": "test_case_candidate.schema.json#/properties/test_level"
+    },
+    "test_category": {
+      "$ref": "test_case_candidate.schema.json#/properties/test_category"
+    },
+    "preconditions": {
+      "$ref": "test_case_candidate.schema.json#/properties/preconditions"
+    },
+    "test_data": {
+      "$ref": "test_case_candidate.schema.json#/properties/test_data"
+    },
+    "steps": {
+      "$ref": "test_case_candidate.schema.json#/properties/steps"
+    },
+    "expected_results": {
+      "$ref": "test_case_candidate.schema.json#/properties/expected_results"
+    },
+    "cleanup": {
+      "$ref": "test_case_candidate.schema.json#/properties/cleanup"
+    },
+    "tags": {
+      "$ref": "test_case_candidate.schema.json#/properties/tags"
+    },
+    "type_details": {
+      "$ref": "test_case_candidate.schema.json#/properties/type_details"
+    }
+  }
+}

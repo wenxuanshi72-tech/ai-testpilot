@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-testpilot.local/schemas/test-cases/v1.2/test_case_candidate_aggregate.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generation_run_id",
+    "requirement_snapshot_hash",
+    "collection_version",
+    "collection_hash",
+    "status",
+    "cases",
+    "coverage_complete",
+    "aggregate_complete"
+  ],
+  "properties": {
+    "schema_version": { "const": "test-cases@1.2.0" },
+    "generation_run_id": { "type": "string", "pattern": "^TGR-[A-F0-9]{32}$" },
+    "requirement_snapshot_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "collection_version": { "const": 1 },
+    "collection_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "status": { "const": "validated_pending_review" },
+    "cases": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 100,
+      "items": { "$ref": "test_case_candidate.schema.json" }
+    },
+    "coverage_complete": { "const": true },
+    "aggregate_complete": { "const": true }
+  }
+}

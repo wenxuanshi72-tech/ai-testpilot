@@ -23,5 +23,31 @@ class PluginConfig:
             "LLM_RUN_MAX_OUTPUT_TOKENS": int(os.getenv("LLM_RUN_MAX_OUTPUT_TOKENS", "26624")),
             "PRD_BATCH_MAX_CHARS": int(os.getenv("PRD_BATCH_MAX_CHARS", "1800")),
             "PRD_BATCH_MAX_REQUIREMENTS": int(os.getenv("PRD_BATCH_MAX_REQUIREMENTS", "12")),
+            "TEST_GENERATION_MAX_REQUIREMENTS_PER_BATCH": int(
+                os.getenv("TEST_GENERATION_MAX_REQUIREMENTS_PER_BATCH", "10")
+            ),
+            "TEST_GENERATION_MAX_CASES_PER_BATCH": int(
+                os.getenv("TEST_GENERATION_MAX_CASES_PER_BATCH", "12")
+            ),
+            "TEST_GENERATION_MAX_OUTPUT_TOKENS": int(
+                os.getenv("TEST_GENERATION_MAX_OUTPUT_TOKENS", "3072")
+            ),
+            "TEST_GENERATION_MAX_RETRIES": int(os.getenv("TEST_GENERATION_MAX_RETRIES", "2")),
+            "TEST_GENERATION_MAX_CORRECTIONS_PER_BATCH": int(
+                os.getenv("TEST_GENERATION_MAX_CORRECTIONS_PER_BATCH", "1")
+            ),
+            "TEST_GENERATION_MAX_CORRECTIONS_PER_RUN": int(
+                os.getenv("TEST_GENERATION_MAX_CORRECTIONS_PER_RUN", "8")
+            ),
+            "TEST_GENERATION_MAX_PROVIDER_RETRIES_PER_BATCH": int(
+                os.getenv("TEST_GENERATION_MAX_PROVIDER_RETRIES_PER_BATCH", "3")
+            ),
+            "TEST_GENERATION_MAX_PROVIDER_RETRIES_PER_RUN": int(
+                os.getenv("TEST_GENERATION_MAX_PROVIDER_RETRIES_PER_RUN", "15")
+            ),
+            "TEST_GENERATION_MAX_TOTAL_PROVIDER_CALLS": int(
+                os.getenv("TEST_GENERATION_MAX_TOTAL_PROVIDER_CALLS", "40")
+            ),
+            "TEST_GENERATION_MAX_COST_USD": os.getenv("TEST_GENERATION_MAX_COST_USD", "0.25"),
             "TESTING": False,
         }

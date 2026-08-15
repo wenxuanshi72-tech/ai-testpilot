@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 from flask.testing import FlaskClient
 from jsonschema import ValidationError
+from sqlalchemy.exc import IntegrityError
 
 from plugin.backend.app.database import PluginDatabase
 from plugin.backend.app.prompts import PromptRegistry
@@ -41,6 +42,12 @@ from plugin.backend.app.test_generation_schemas import (
 )
 from plugin.backend.app.test_generation_schemas import (
     TestCaseSchemas as CaseSchemas,
+)
+from plugin.backend.app.test_review import (
+    TestReviewError as ReviewError,
+)
+from plugin.backend.app.test_review import (
+    TestReviewService as ReviewService,
 )
 
 PROJECT_ID = "PRJ-11111111111111111111111111111111"
@@ -283,7 +290,7 @@ class ScriptedNetworkFailureProvider(MockLLMProvider):
         return super().generate_test_cases(**kwargs)
 
 
-def test_migration_has_phase5b_tables_but_no_phase6_tables(database: PluginDatabase) -> None:
+def test_migration_has_phase5b_and_phase6_tables(database: PluginDatabase) -> None:
     tables = {
         str(row["name"])
         for row in database.fetch_all("SELECT name FROM sqlite_master WHERE type='table'")
@@ -305,9 +312,10 @@ def test_migration_has_phase5b_tables_but_no_phase6_tables(database: PluginDatab
         "frozen_baselines",
         "frozen_baseline_members",
         "immutable_execution_snapshots",
-    }.isdisjoint(tables)
+        "test_case_review_audit_events",
+    } <= tables
     migration = database.fetch_one("SELECT COUNT(*) AS count FROM schema_migrations")
-    assert migration == {"count": 5}
+    assert migration == {"count": 6}
 
 
 def test_versioned_schemas_and_prompts_are_complete() -> None:
@@ -440,6 +448,142 @@ def test_phase6_contract_is_read_only_and_not_reviewed(
     assert collection["review_disposition"] == "not_reviewed_phase6_required"
     assert collection["candidate_count"] == len(collection["cases"]) == 46
     assert _count(formal_database, "test_case_candidates") == before
+
+
+def test_phase6_review_rejects_stale_hash_and_freeze_requires_all_approved(
+    formal_database: PluginDatabase,
+) -> None:
+    generation = GenerationService(formal_database).start(
+        PROJECT_ID, MockLLMProvider(), "phase6-review-guards"
+    )
+    review = ReviewService(formal_database)
+    collection = review.collection(generation.run_id)
+    first = collection["candidates"][0]
+    with pytest.raises(ReviewError, match="CANDIDATE_HASH_CHANGED"):
+        review.review(
+            generation.run_id,
+            first["case_id"],
+            reviewer_id="portfolio-owner",
+            decision="approve",
+            comment="Reviewed against the formal requirement.",
+            expected_content_hash="0" * 64,
+        )
+    review.review(
+        generation.run_id,
+        first["case_id"],
+        reviewer_id="portfolio-owner",
+        decision="request_changes",
+        comment="Clarify this candidate before approval.",
+        expected_content_hash=first["content_hash"],
+    )
+    with pytest.raises(ReviewError, match="COLLECTION_NOT_FULLY_APPROVED"):
+        review.freeze(
+            generation.run_id,
+            frozen_by="portfolio-owner",
+            environment_id="local-test",
+            executor_contract_version="test-executor@1.0.0",
+        )
+
+
+def test_phase6_approves_complete_collection_and_atomically_freezes_snapshots(
+    formal_database: PluginDatabase,
+) -> None:
+    generation = GenerationService(formal_database).start(
+        PROJECT_ID, MockLLMProvider(), "phase6-freeze"
+    )
+    service = ReviewService(formal_database)
+    collection = service.collection(generation.run_id)
+    for item in collection["candidates"]:
+        result = service.review(
+            generation.run_id,
+            item["case_id"],
+            reviewer_id="portfolio-owner",
+            decision="approve",
+            comment="Approved after deterministic contract and trace review.",
+            expected_content_hash=item["content_hash"],
+        )
+        assert result["approved_test_case_version_id"]
+        assert len(result["approved_content_hash"]) == 64
+    frozen = service.freeze(
+        generation.run_id,
+        frozen_by="portfolio-owner",
+        environment_id="local-test",
+        executor_contract_version="test-executor@1.0.0",
+    )
+    assert frozen.status == "frozen"
+    assert frozen.snapshot_count == 46
+    assert len(frozen.baseline_hash) == 64
+    baseline = service.baseline(frozen.baseline_id)
+    assert baseline["collection_hash"] == generation.collection_hash
+    assert len(baseline["snapshots"]) == 46
+    assert {item["snapshot"]["case"]["review_status"] for item in baseline["snapshots"]} == {
+        "approved"
+    }
+    assert all(item["snapshot"]["requirement_trace"] for item in baseline["snapshots"])
+    again = service.freeze(
+        generation.run_id,
+        frozen_by="portfolio-owner",
+        environment_id="local-test",
+        executor_contract_version="test-executor@1.0.0",
+    )
+    assert again == frozen
+
+
+def test_phase6_records_reject_without_approval_and_preserves_immutable_history(
+    formal_database: PluginDatabase,
+) -> None:
+    generation = GenerationService(formal_database).start(
+        PROJECT_ID, MockLLMProvider(), "phase6-reject"
+    )
+    service = ReviewService(formal_database)
+    first = service.collection(generation.run_id)["candidates"][0]
+    result = service.review(
+        generation.run_id,
+        first["case_id"],
+        reviewer_id="portfolio-owner",
+        decision="reject",
+        comment="Rejected with an explicit review rationale.",
+        expected_content_hash=first["content_hash"],
+    )
+    assert result["approved_test_case_version_id"] is None
+    review_id = result["review_id"]
+    with pytest.raises(IntegrityError, match="reviews are immutable"):
+        formal_database.execute(
+            "UPDATE test_case_reviews SET comment='changed' WHERE test_case_review_id=:id",
+            {"id": review_id},
+        )
+
+
+def test_phase6_http_boundary_exposes_review_and_freeze_without_execution(
+    formal_database: PluginDatabase, client: FlaskClient
+) -> None:
+    generation = GenerationService(formal_database).start(
+        PROJECT_ID, MockLLMProvider(), "phase6-api"
+    )
+    response = client.get(f"/api/v1/test-generation-runs/{generation.run_id}/reviews")
+    assert response.status_code == 200
+    candidates = response.get_json()["data"]["candidates"]
+    first = candidates[0]
+    reviewed = client.post(
+        f"/api/v1/test-generation-runs/{generation.run_id}/candidates/{first['case_id']}/reviews",
+        json={
+            "reviewer_id": "portfolio-owner",
+            "decision": "approve",
+            "comment": "Approved through the versioned review API.",
+            "expected_content_hash": first["content_hash"],
+        },
+    )
+    assert reviewed.status_code == 201
+    blocked = client.post(
+        f"/api/v1/test-generation-runs/{generation.run_id}/frozen-baselines",
+        json={
+            "frozen_by": "portfolio-owner",
+            "environment_id": "local-test",
+            "executor_contract_version": "test-executor@1.0.0",
+        },
+    )
+    assert blocked.status_code == 409
+    assert "COLLECTION_NOT_FULLY_APPROVED" in blocked.get_json()["error"]["message"]
 
 
 def test_idempotency_never_repeats_successful_batches(

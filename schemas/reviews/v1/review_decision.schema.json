@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-testpilot.local/schemas/reviews/v1/review_decision.schema.json",
+  "title": "AI TestPilot human test-case review decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "reviewer_id", "decision", "comment", "expected_content_hash"],
+  "properties": {
+    "schema_version": { "const": "test-case-review@1.0.0" },
+    "reviewer_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.@-]{1,79}$" },
+    "decision": { "enum": ["approve", "reject", "request_changes"] },
+    "comment": { "type": "string", "minLength": 1, "maxLength": 1000 },
+    "expected_content_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  }
+}

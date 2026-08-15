@@ -403,7 +403,7 @@ def test_migration_persists_cost_contract_without_phase6_entities(
         "approved_test_case_versions",
         "frozen_baselines",
         "immutable_execution_snapshots",
-    }.isdisjoint(tables)
+    } <= tables
 
 
 def test_mock_persistence_records_zero_cost_per_call_and_run(

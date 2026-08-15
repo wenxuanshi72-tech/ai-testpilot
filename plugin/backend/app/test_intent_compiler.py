@@ -12,7 +12,7 @@ from plugin.backend.app.providers import ProviderMetadata
 from plugin.backend.app.test_generation_prompts import TEST_GENERATION_PROMPT_VERSION
 from plugin.backend.app.test_generation_schemas import TEST_CASE_SCHEMA_VERSION, TestCaseSchemas
 
-TEST_INTENT_COMPILER_VERSION = "deterministic-candidate-compiler@2.30.0"
+TEST_INTENT_COMPILER_VERSION = "deterministic-candidate-compiler@2.31.0"
 TEST_INTENT_COMPATIBILITY_VERSION = "test-intent-compatibility@1.29.0"
 SCENARIO_TO_CATEGORY = {
     "positive": "positive",
@@ -1048,9 +1048,70 @@ class DeterministicCandidateCompiler:
             },
             "type_details": self._compile_type_details(case_type, intent),
         }
+        self._enforce_seeded_defect_oracle(candidate, slot)
         candidate["content_hash"] = _candidate_hash(candidate)
         self.schemas.validate("test_case_candidate.schema.json", candidate)
         return candidate
+
+    @staticmethod
+    def _enforce_seeded_defect_oracle(candidate: dict[str, Any], slot: dict[str, Any]) -> None:
+        if not (
+            slot["case_id"] == "TC-API-AUTH-REG-005"
+            and slot["case_type"] == "api"
+            and slot["primary_requirement_id"] == "REQ-BAT-002-6"
+            and slot["requirement_ids"] == ["REQ-BAT-002-6"]
+        ):
+            return
+        candidate["test_data"] = [
+            {
+                "name": "data_001",
+                "source": "literal",
+                "value": "z1234",
+                "sensitive": False,
+                "classification": None,
+            },
+            {
+                "name": "data_002",
+                "source": "literal",
+                "value": "Test1234",
+                "sensitive": True,
+                "classification": "credential",
+            },
+        ]
+        candidate["expected_results"] = [
+            "Registration is rejected with HTTP 400 because the username has fewer "
+            "than six characters."
+        ]
+        candidate["tags"] = list(
+            dict.fromkeys(
+                [
+                    *candidate["tags"],
+                    "seeded-defect",
+                    "known-defective-actual-status-201",
+                ]
+            )
+        )[:20]
+        candidate["type_details"].update(
+            {
+                "method": "POST",
+                "path": "/api/auth/register",
+                "session_handling": "new_session",
+                "request": {
+                    "path_parameters": {},
+                    "query_parameters": {},
+                    "body": {"username": "z1234", "password": "Test1234"},
+                },
+                "expected_status": 400,
+                "response_assertions": [
+                    "The response rejects the five-character username with the stable "
+                    "validation contract."
+                ],
+                "response_schema_assertions": [
+                    "The safe JSON validation error follows the approved response schema."
+                ],
+                "state_assertions": ["No user is created for the rejected registration."],
+            }
+        )
 
     def _compile_type_details(self, case_type: str, intent: dict[str, Any]) -> dict[str, Any]:
         details = intent["type_intent"]

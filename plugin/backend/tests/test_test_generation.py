@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Callable
+from copy import deepcopy
 from typing import Any
 
 import pytest
@@ -404,10 +405,26 @@ def test_seeded_defect_api_and_ui_guards_are_preserved(
     ui = json.loads(str(rows[1]["payload_json"]))
     assert api["requirement_ids"] == [SEEDED_REQUIREMENT_ID]
     assert ui["requirement_ids"] == [SEEDED_REQUIREMENT_ID]
+    assert api["type_details"]["method"] == "POST"
+    assert api["type_details"]["path"] == "/api/auth/register"
     assert api["type_details"]["expected_status"] == 400
+    assert api["type_details"]["request"]["body"]["username"] == "z1234"
     assert "z1234" in json.dumps(api)
     assert "Test1234" in json.dumps(api)
     assert "z1234" in json.dumps(ui)
+
+    snapshots = GenerationService(formal_database)._load_requirement_snapshots(PROJECT_ID)
+    bad_cases = [deepcopy(api), deepcopy(ui)]
+    bad_api = next(case for case in bad_cases if case["case_id"] == "TC-API-AUTH-REG-005")
+    bad_api["type_details"]["expected_status"] = 201
+    with pytest.raises(GenerationError, match="BUG_AUTH_001_ORACLE_INVALID"):
+        GenerationService(formal_database)._validate_seeded_defect(bad_cases, snapshots)
+
+    actual_status = 201
+    execution_result = "PASS" if actual_status == api["type_details"]["expected_status"] else "FAIL"
+    linked_bug_id = "BUG-AUTH-001" if execution_result == "FAIL" else None
+    assert execution_result == "FAIL"
+    assert linked_bug_id == "BUG-AUTH-001"
 
 
 def test_phase6_contract_is_read_only_and_not_reviewed(

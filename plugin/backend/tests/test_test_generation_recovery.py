@@ -226,6 +226,8 @@ def test_reviewed_collection_with_request_changes_is_a_valid_rework_source(
         candidate["case_id"],
         reviewer_id="portfolio-owner",
         decision="request_changes",
+        automation_disposition="deferred",
+        disposition_reason="Reviewed collection requires regeneration.",
         comment="Regenerate this reviewed collection before any freeze.",
         expected_content_hash=candidate["content_hash"],
     )

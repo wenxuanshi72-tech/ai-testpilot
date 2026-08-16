@@ -2,7 +2,7 @@
 
 ## Current result
 
-**IMPLEMENTATION ACCEPTANCE: PASS; REAL COLLECTION: REQUEST CHANGES; FREEZE: STOPPED**
+**MVP IMPLEMENTATION: OFFLINE PASS; HUMAN CLASSIFICATION/FREEZE: PENDING**
 
 The Phase 6 review, approval-version, frozen-baseline, immutable-snapshot, and audit capabilities are
 implemented. Automated acceptance uses isolated Mock-provider candidate data and a clearly labelled
@@ -24,19 +24,21 @@ audit; it is not approved and must not be frozen.
 - Deterministic candidate executability report and approval gate
 - Enumerated anonymous, authenticated, expired, and revoked session fixtures
 - Current-chain checkpoint executability revalidation before reuse
+- Historical approval compatibility: immutable v1 retention, validated v2 human revisions, and
+  latest-review-only baseline selection
 
 ## Verification evidence
 
 | Gate | Result |
 |---|---|
-| Phase 6 focused generation/review tests | 51 passed |
-| Plugin backend complete suite | 236 passed, 1 deselected |
-| Full repository Python suite | 281 passed, 22 deselected |
+| Phase 6 focused generation/review tests | 80 passed |
+| Plugin backend complete suite | 243 passed, 1 deselected |
+| Full repository Python suite | 288 passed, 22 deselected |
 | Ruff format | PASS |
 | Ruff check | PASS |
-| mypy | PASS, 30 Plugin application source files |
-| Empty database migration | 0001 through 0006 PASS |
-| Existing database upgrade test | 0003 through 0006 PASS |
+| mypy | PASS, 32 Plugin application source files |
+| Empty database migration | 0001 through 0007 PASS |
+| Existing database upgrade tests | 0003 through 0007 and 0006 through 0007 PASS |
 | SQLite integrity check | `ok` |
 | SQLite foreign-key check | 0 findings |
 | `git diff --check` | PASS |
@@ -53,9 +55,11 @@ actions, inaccessible role-only locators, nonexistent API/UI targets, and the co
 defect objective. The earlier approval record remains immutable audit history; a later change request
 prevents it from satisfying the latest-decision freeze gate.
 
-No frozen baseline or execution snapshot was created. A read-only recovery plan against the current
-assets found 5 reusable batches and 12 batches requiring Provider regeneration. A replacement
-collection therefore remains pending a separately bounded real-provider run and a new human review.
+No frozen baseline or execution snapshot was created. After the full-collection approach exposed
+unnecessary portfolio complexity, Phase 6 adopted `portfolio-mvp-baseline@1.0.0`. A read-only plan
+for the unchanged real collection proposes 10 automated, 12 manual, and 24 deferred candidates.
+The plan is not a human decision and `ready_to_freeze` remains false until the 10 selected cases are
+reviewed/revised, executable, and explicitly approved.
 
 ## Boundary
 

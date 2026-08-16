@@ -2,25 +2,26 @@
 
 ## Scope
 
-Phase 6 turns a complete Phase 5B `validated_pending_review` collection into reviewed,
-versioned, immutable execution input. It does not execute API, UI, or manual tests and it does not
-produce verdicts, evidence, bugs, or reports.
+Phase 6 treats all 46 Phase 5B candidates as test-design evidence, classifies every candidate as
+`automated`, `manual`, or `deferred`, and freezes only an approved 8–12 case portfolio MVP subset.
+It does not claim that every AI draft is automatable and does not execute tests or produce results.
 
 ## State flow
 
 ```text
 validated_pending_review candidate
   -> deterministic executability preflight
-  -> append-only human review (approve | reject | request_changes)
-  -> immutable approved case version (approve only)
-  -> complete-collection freeze gate
-  -> frozen baseline
-  -> one immutable execution snapshot per approved case
+  -> append-only human review and automation disposition
+  -> optional immutable human-authored revision
+  -> immutable approved version for approve + automated only
+  -> all-candidates-classified MVP subset gate
+  -> frozen 8-12 case baseline
+  -> one immutable execution snapshot per approved automated case
 ```
 
-Freezing is rejected unless every candidate in the collection has a latest `approve` decision and
-an approved version. A rejection or change request therefore cannot be bypassed by partial
-freezing.
+Freezing is rejected unless all 46 candidates have an attributable latest classification, every
+automated candidate is approved and executable, the subset contains 8–12 cases, and both seeded
+defect API/UI cases are included. Manual and deferred cases never become execution snapshots.
 
 ## Integrity controls
 
@@ -31,8 +32,15 @@ freezing.
   reviewable only through `request_changes` or `reject`.
 - `expired_session` and `revoked_session` compile to enumerated authenticated-session fixtures;
   arbitrary database prose and `N/A` placeholders are never executable snapshot actions.
+- Every execution snapshot uses `fresh_database_per_run` and `discard_run_database`; the executor
+  never executes model-authored SQL or natural-language database cleanup.
+- Human revisions are append-only, preserve candidate identity/type/trace, and require fresh schema
+  and executability validation before automated approval.
 - Candidate payload hashes are recomputed before a decision is persisted.
 - Approved payloads are copied into immutable approved versions with their own hashes.
+- A candidate may have multiple immutable approved versions, each bound one-to-one to its review.
+  Approval rejects stale revisions and duplicate candidate/revision content, assigns a version above
+  all historical versions, and freeze selects only the approved version bound to the latest review.
 - Requirement links are copied into each snapshot and hashed independently.
 - The baseline hash binds the Phase 5B collection hash, environment, protocol, executor contract,
   and the ordered approved member list.
@@ -44,7 +52,8 @@ freezing.
 
 ## Versioned contracts
 
-- Review workflow and request schemas: `test-case-review@1.0.0`
+- Review workflow and request schemas: `test-case-review@2.0.0`
+- MVP policy: `portfolio-mvp-baseline@1.0.0`
 - Unified protocol: `unified-test-protocol@1.0.0`
 - Execution snapshot: `execution-snapshot@1.0.0`
 
@@ -52,6 +61,8 @@ freezing.
 
 - `GET /api/v1/test-generation-runs/{run_id}/reviews`
 - `GET /api/v1/test-generation-runs/{run_id}/executability`
+- `GET /api/v1/test-generation-runs/{run_id}/mvp-classification-plan`
+- `POST /api/v1/test-generation-runs/{run_id}/candidates/{case_id}/human-revisions`
 - `POST /api/v1/test-generation-runs/{run_id}/candidates/{case_id}/reviews`
 - `POST /api/v1/test-generation-runs/{run_id}/frozen-baselines`
 - `GET /api/v1/frozen-baselines/{baseline_id}`

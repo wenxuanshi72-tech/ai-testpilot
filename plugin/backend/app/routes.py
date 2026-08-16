@@ -316,6 +316,16 @@ def phase6_executability_report(run_id: str) -> tuple[Any, int]:
     return jsonify({"data": report, "meta": {"request_id": request_id()}}), 200
 
 
+@api.get("/test-generation-runs/<run_id>/mvp-classification-plan")
+def phase6_mvp_classification_plan(run_id: str) -> tuple[Any, int]:
+    try:
+        plan = _test_review_service().mvp_classification_plan(run_id)
+    except TestReviewError as error:
+        status = 404 if str(error) == "GENERATION_RUN_NOT_FOUND" else 409
+        raise ApiError("MVP_CLASSIFICATION_PLAN_UNAVAILABLE", str(error), status) from error
+    return jsonify({"data": plan, "meta": {"request_id": request_id()}}), 200
+
+
 @api.post("/test-generation-runs/<run_id>/candidates/<case_id>/reviews")
 def phase6_review_candidate(run_id: str, case_id: str) -> tuple[Any, int]:
     payload = _json_object()
@@ -325,12 +335,38 @@ def phase6_review_candidate(run_id: str, case_id: str) -> tuple[Any, int]:
             case_id,
             reviewer_id=str(payload.get("reviewer_id", "")),
             decision=str(payload.get("decision", "")),
+            automation_disposition=str(payload.get("automation_disposition", "")),
+            disposition_reason=str(payload.get("disposition_reason", "")),
             comment=str(payload.get("comment", "")),
             expected_content_hash=str(payload.get("expected_content_hash", "")),
+            human_revision_id=(
+                str(payload["human_revision_id"]) if payload.get("human_revision_id") else None
+            ),
         )
     except TestReviewError as error:
         status = 404 if str(error) == "CANDIDATE_NOT_FOUND" else 409
         raise ApiError("TEST_CASE_REVIEW_ERROR", str(error), status) from error
+    return jsonify({"data": result, "meta": {"request_id": request_id()}}), 201
+
+
+@api.post("/test-generation-runs/<run_id>/candidates/<case_id>/human-revisions")
+def phase6_create_human_revision(run_id: str, case_id: str) -> tuple[Any, int]:
+    payload = _json_object()
+    revised_candidate: dict[str, Any] = (
+        payload["candidate"] if isinstance(payload.get("candidate"), dict) else {}
+    )
+    try:
+        result = _test_review_service().create_human_revision(
+            run_id,
+            case_id,
+            revised_by=str(payload.get("revised_by", "")),
+            revision_reason=str(payload.get("revision_reason", "")),
+            expected_content_hash=str(payload.get("expected_content_hash", "")),
+            candidate=revised_candidate,
+        )
+    except TestReviewError as error:
+        status = 404 if str(error) == "CANDIDATE_NOT_FOUND" else 409
+        raise ApiError("HUMAN_REVISION_ERROR", str(error), status) from error
     return jsonify({"data": result, "meta": {"request_id": request_id()}}), 201
 
 

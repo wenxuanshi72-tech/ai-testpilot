@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-testpilot.local/schemas/reviews/v2/human_revision.schema.json",
+  "title": "AI TestPilot human-authored candidate revision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "revised_by", "revision_reason", "expected_content_hash", "candidate"],
+  "properties": {
+    "schema_version": { "const": "test-case-review@2.0.0" },
+    "revised_by": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.@-]{1,79}$" },
+    "revision_reason": { "type": "string", "minLength": 1, "maxLength": 1000 },
+    "expected_content_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "candidate": { "type": "object" }
+  }
+}

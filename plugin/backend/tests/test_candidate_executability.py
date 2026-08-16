@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
 
 from plugin.backend.app.candidate_executability import (
@@ -100,3 +102,18 @@ def test_non_seeded_api_case_is_not_rewritten_by_seeded_rules() -> None:
     candidate["type_details"]["expected_status"] = 201
     candidate["type_details"]["request"]["body"]["username"] = "valid-user"
     assert validate_candidate_executability(candidate) == []
+
+
+def test_real_failure_shapes_remain_rejected_without_guessing_or_deletion() -> None:
+    fixture_path = Path(__file__).parent / "fixtures" / "phase6_executability_failures.json"
+    fixtures = json.loads(fixture_path.read_text(encoding="utf-8"))
+    observed: dict[tuple[str, str], set[str]] = {}
+    for fixture in fixtures:
+        findings = validate_candidate_executability(fixture["candidate"])
+        codes = {finding.code for finding in findings}
+        observed[(fixture["batch_key"], fixture["case_id"])] = codes
+        assert set(fixture["expected_findings"]) <= codes
+    assert observed[("TGB-API-005", "TC-API-REQ-BAT-002-9")] == {"EXECUTION_OPERATION_UNSTRUCTURED"}
+    assert observed[("TGB-UI-001", "TC-UI-REQ-AUTH-001")] == {"UI_ROUTE_NOT_IN_CONTRACT"}
+    assert observed[("TGB-UI-001", "TC-UI-REQ-BAT-002-10")] == {"UI_ROUTE_NOT_IN_CONTRACT"}
+    assert observed[("TGB-UI-004", "TC-UI-REQ-LOGOUT-001")] == {"UI_ROUTE_NOT_IN_CONTRACT"}

@@ -17,6 +17,7 @@ from plugin.backend.app.ids import new_id
 from plugin.backend.app.prompts import PROMPT_VERSION, SCHEMA_VERSION, PromptRegistry
 from plugin.backend.app.providers import DeepSeekProvider, LLMProvider, MockLLMProvider
 from plugin.backend.app.test_generation import TestGenerationError, TestGenerationService
+from plugin.backend.app.test_review import TestReviewError, TestReviewService
 
 api = Blueprint("plugin_api", __name__, url_prefix="/api/v1")
 
@@ -82,6 +83,10 @@ def _test_generation_service() -> TestGenerationService:
         max_total_provider_calls=current_app.config["TEST_GENERATION_MAX_TOTAL_PROVIDER_CALLS"],
         max_run_cost_usd=current_app.config["TEST_GENERATION_MAX_COST_USD"],
     )
+
+
+def _test_review_service() -> TestReviewService:
+    return TestReviewService(_database())
 
 
 @api.get("/health")
@@ -289,6 +294,105 @@ def phase6_candidate_collection(run_id: str) -> tuple[Any, int]:
         status = 404 if str(error) == "GENERATION_RUN_NOT_FOUND" else 409
         raise ApiError("CANDIDATE_COLLECTION_UNAVAILABLE", str(error), status) from error
     return jsonify({"data": collection, "meta": {"request_id": request_id()}}), 200
+
+
+@api.get("/test-generation-runs/<run_id>/reviews")
+def phase6_review_collection(run_id: str) -> tuple[Any, int]:
+    try:
+        collection = _test_review_service().collection(run_id)
+    except TestReviewError as error:
+        status = 404 if str(error) == "GENERATION_RUN_NOT_FOUND" else 409
+        raise ApiError("REVIEW_COLLECTION_UNAVAILABLE", str(error), status) from error
+    return jsonify({"data": collection, "meta": {"request_id": request_id()}}), 200
+
+
+@api.get("/test-generation-runs/<run_id>/executability")
+def phase6_executability_report(run_id: str) -> tuple[Any, int]:
+    try:
+        report = _test_review_service().executability_report(run_id)
+    except TestReviewError as error:
+        status = 404 if str(error) == "GENERATION_RUN_NOT_FOUND" else 409
+        raise ApiError("EXECUTABILITY_REPORT_UNAVAILABLE", str(error), status) from error
+    return jsonify({"data": report, "meta": {"request_id": request_id()}}), 200
+
+
+@api.get("/test-generation-runs/<run_id>/mvp-classification-plan")
+def phase6_mvp_classification_plan(run_id: str) -> tuple[Any, int]:
+    try:
+        plan = _test_review_service().mvp_classification_plan(run_id)
+    except TestReviewError as error:
+        status = 404 if str(error) == "GENERATION_RUN_NOT_FOUND" else 409
+        raise ApiError("MVP_CLASSIFICATION_PLAN_UNAVAILABLE", str(error), status) from error
+    return jsonify({"data": plan, "meta": {"request_id": request_id()}}), 200
+
+
+@api.post("/test-generation-runs/<run_id>/candidates/<case_id>/reviews")
+def phase6_review_candidate(run_id: str, case_id: str) -> tuple[Any, int]:
+    payload = _json_object()
+    try:
+        result = _test_review_service().review(
+            run_id,
+            case_id,
+            reviewer_id=str(payload.get("reviewer_id", "")),
+            decision=str(payload.get("decision", "")),
+            automation_disposition=str(payload.get("automation_disposition", "")),
+            disposition_reason=str(payload.get("disposition_reason", "")),
+            comment=str(payload.get("comment", "")),
+            expected_content_hash=str(payload.get("expected_content_hash", "")),
+            human_revision_id=(
+                str(payload["human_revision_id"]) if payload.get("human_revision_id") else None
+            ),
+        )
+    except TestReviewError as error:
+        status = 404 if str(error) == "CANDIDATE_NOT_FOUND" else 409
+        raise ApiError("TEST_CASE_REVIEW_ERROR", str(error), status) from error
+    return jsonify({"data": result, "meta": {"request_id": request_id()}}), 201
+
+
+@api.post("/test-generation-runs/<run_id>/candidates/<case_id>/human-revisions")
+def phase6_create_human_revision(run_id: str, case_id: str) -> tuple[Any, int]:
+    payload = _json_object()
+    revised_candidate: dict[str, Any] = (
+        payload["candidate"] if isinstance(payload.get("candidate"), dict) else {}
+    )
+    try:
+        result = _test_review_service().create_human_revision(
+            run_id,
+            case_id,
+            revised_by=str(payload.get("revised_by", "")),
+            revision_reason=str(payload.get("revision_reason", "")),
+            expected_content_hash=str(payload.get("expected_content_hash", "")),
+            candidate=revised_candidate,
+        )
+    except TestReviewError as error:
+        status = 404 if str(error) == "CANDIDATE_NOT_FOUND" else 409
+        raise ApiError("HUMAN_REVISION_ERROR", str(error), status) from error
+    return jsonify({"data": result, "meta": {"request_id": request_id()}}), 201
+
+
+@api.post("/test-generation-runs/<run_id>/frozen-baselines")
+def phase6_freeze_baseline(run_id: str) -> tuple[Any, int]:
+    payload = _json_object()
+    try:
+        result = _test_review_service().freeze(
+            run_id,
+            frozen_by=str(payload.get("frozen_by", "")),
+            environment_id=str(payload.get("environment_id", "")),
+            executor_contract_version=str(payload.get("executor_contract_version", "")),
+        )
+    except TestReviewError as error:
+        raise ApiError("BASELINE_FREEZE_ERROR", str(error), 409) from error
+    return jsonify({"data": result.__dict__, "meta": {"request_id": request_id()}}), 201
+
+
+@api.get("/frozen-baselines/<baseline_id>")
+def phase6_frozen_baseline(baseline_id: str) -> tuple[Any, int]:
+    try:
+        baseline = _test_review_service().baseline(baseline_id)
+    except TestReviewError as error:
+        status = 404 if str(error) == "BASELINE_NOT_FOUND" else 409
+        raise ApiError("FROZEN_BASELINE_UNAVAILABLE", str(error), status) from error
+    return jsonify({"data": baseline, "meta": {"request_id": request_id()}}), 200
 
 
 def _requirements_response(project_id: str, analysis_run_id: str | None) -> tuple[Any, int]:

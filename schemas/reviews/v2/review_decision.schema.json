@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-testpilot.local/schemas/reviews/v2/review_decision.schema.json",
+  "title": "AI TestPilot portfolio MVP test-case review decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "reviewer_id",
+    "decision",
+    "automation_disposition",
+    "disposition_reason",
+    "comment",
+    "expected_content_hash"
+  ],
+  "properties": {
+    "schema_version": { "const": "test-case-review@2.0.0" },
+    "reviewer_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.@-]{1,79}$" },
+    "decision": { "enum": ["approve", "reject", "request_changes"] },
+    "automation_disposition": { "enum": ["automated", "manual", "deferred"] },
+    "disposition_reason": { "type": "string", "minLength": 1, "maxLength": 1000 },
+    "comment": { "type": "string", "minLength": 1, "maxLength": 1000 },
+    "expected_content_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "human_revision_id": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string", "pattern": "^TCHR-[A-F0-9]{32}$" }
+      ],
+      "default": null
+    }
+  }
+}

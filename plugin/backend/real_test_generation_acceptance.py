@@ -310,8 +310,24 @@ def _reusable_batch_keys(
     )
     if not source:
         raise RealAcceptanceError("RESUME_RUN_NOT_FOUND")
-    if source["status"] not in {"running", "blocked", "failed"}:
-        raise RealAcceptanceError("RESUME_RUN_NOT_INCOMPLETE")
+    source_status = str(source["status"])
+    if source_status not in {"running", "blocked", "failed"}:
+        review_tables = database.fetch_one(
+            "SELECT COUNT(*) AS count FROM sqlite_master "
+            "WHERE type='table' AND name='test_case_reviews'"
+        )
+        has_requested_changes = False
+        if source_status == "validated_pending_review" and review_tables == {"count": 1}:
+            requested_changes = database.fetch_one(
+                "SELECT COUNT(*) AS count FROM test_case_reviews r "
+                "JOIN test_case_candidates c ON c.test_case_candidate_id="
+                "r.test_case_candidate_id "
+                "WHERE c.test_generation_run_id=:run AND r.decision='request_changes'",
+                {"run": resume_run_id},
+            )
+            has_requested_changes = bool(requested_changes and requested_changes["count"])
+        if not has_requested_changes:
+            raise RealAcceptanceError("RESUME_RUN_NOT_INCOMPLETE_OR_REVIEW_REWORK")
     if (
         source["provider"] != "deepseek"
         or source["model"] != "deepseek-v4-pro"

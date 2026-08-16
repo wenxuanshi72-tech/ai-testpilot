@@ -177,4 +177,4 @@ def test_migration_contains_required_tables(database: PluginDatabase) -> None:
     database.migrate()
     migration_count = database.fetch_one("SELECT COUNT(*) AS count FROM schema_migrations")
     assert migration_count is not None
-    assert migration_count["count"] == 5
+    assert migration_count["count"] == 7

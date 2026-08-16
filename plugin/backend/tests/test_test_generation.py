@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 from flask.testing import FlaskClient
 from jsonschema import ValidationError
+from sqlalchemy.exc import IntegrityError
 
 from plugin.backend.app.database import PluginDatabase
 from plugin.backend.app.prompts import PromptRegistry
@@ -41,6 +42,12 @@ from plugin.backend.app.test_generation_schemas import (
 )
 from plugin.backend.app.test_generation_schemas import (
     TestCaseSchemas as CaseSchemas,
+)
+from plugin.backend.app.test_review import (
+    TestReviewError as ReviewError,
+)
+from plugin.backend.app.test_review import (
+    TestReviewService as ReviewService,
 )
 
 PROJECT_ID = "PRJ-11111111111111111111111111111111"
@@ -241,6 +248,61 @@ class MutatingMockProvider(MockLLMProvider):
         )
 
 
+def _inject_unstructured_cleanup(payload: dict[str, Any], call_count: int) -> None:
+    if call_count == 1:
+        payload["intents"][0]["cleanup_intent"] = {
+            "required": True,
+            "instructions": ["Delete the created user and session records from the database."],
+        }
+
+
+def test_candidate_executability_failure_corrects_only_current_batch(
+    formal_database: PluginDatabase,
+) -> None:
+    provider = MutatingMockProvider(_inject_unstructured_cleanup)
+    result = GenerationService(formal_database, max_retries=1).start(
+        PROJECT_ID, provider, "executability-correction"
+    )
+    assert result.status == "validated_pending_review"
+    assert provider.call_count == 14
+    first = formal_database.fetch_one(
+        "SELECT status,retry_count FROM test_generation_batches "
+        "WHERE test_generation_run_id=:run AND batch_key='TGB-API-001'",
+        {"run": result.run_id},
+    )
+    assert first == {"status": "validated", "retry_count": 1}
+    finding = formal_database.fetch_one(
+        "SELECT details_json FROM test_case_generation_audit_events "
+        "WHERE test_generation_run_id=:run "
+        "AND event_type='candidate_executability_failed'",
+        {"run": result.run_id},
+    )
+    assert finding
+    details = json.loads(finding["details_json"])
+    assert details["case_id"].startswith("TC-API-")
+    assert details["findings"][0]["code"] == "EXECUTION_OPERATION_UNSTRUCTURED"
+    assert details["findings"][0]["path"].endswith("/cleanup_requests/0")
+
+
+def test_candidate_executability_failure_without_budget_stops_at_batch(
+    formal_database: PluginDatabase,
+) -> None:
+    provider = MutatingMockProvider(_inject_unstructured_cleanup)
+    result = GenerationService(formal_database, max_retries=0).start(
+        PROJECT_ID, provider, "executability-no-correction"
+    )
+    assert result.status == "failed"
+    assert provider.call_count == 1
+    assert _count(formal_database, "test_case_candidates") == 0
+    statuses = formal_database.fetch_all(
+        "SELECT batch_key,status FROM test_generation_batches "
+        "WHERE test_generation_run_id=:run ORDER BY batch_index",
+        {"run": result.run_id},
+    )
+    assert statuses[0] == {"batch_key": "TGB-API-001", "status": "failed"}
+    assert all(item["status"] == "pending" for item in statuses[1:])
+
+
 class TruncatedMockProvider(MockLLMProvider):
     def generate_test_cases(self, **kwargs: Any) -> ProviderResponse:
         response = super().generate_test_cases(**kwargs)
@@ -283,7 +345,7 @@ class ScriptedNetworkFailureProvider(MockLLMProvider):
         return super().generate_test_cases(**kwargs)
 
 
-def test_migration_has_phase5b_tables_but_no_phase6_tables(database: PluginDatabase) -> None:
+def test_migration_has_phase5b_and_phase6_tables(database: PluginDatabase) -> None:
     tables = {
         str(row["name"])
         for row in database.fetch_all("SELECT name FROM sqlite_master WHERE type='table'")
@@ -305,9 +367,10 @@ def test_migration_has_phase5b_tables_but_no_phase6_tables(database: PluginDatab
         "frozen_baselines",
         "frozen_baseline_members",
         "immutable_execution_snapshots",
-    }.isdisjoint(tables)
+        "test_case_review_audit_events",
+    } <= tables
     migration = database.fetch_one("SELECT COUNT(*) AS count FROM schema_migrations")
-    assert migration == {"count": 5}
+    assert migration == {"count": 7}
 
 
 def test_versioned_schemas_and_prompts_are_complete() -> None:
@@ -440,6 +503,354 @@ def test_phase6_contract_is_read_only_and_not_reviewed(
     assert collection["review_disposition"] == "not_reviewed_phase6_required"
     assert collection["candidate_count"] == len(collection["cases"]) == 46
     assert _count(formal_database, "test_case_candidates") == before
+
+
+def test_phase6_review_rejects_stale_hash_and_freeze_requires_all_approved(
+    formal_database: PluginDatabase,
+) -> None:
+    generation = GenerationService(formal_database).start(
+        PROJECT_ID, MockLLMProvider(), "phase6-review-guards"
+    )
+    review = ReviewService(formal_database)
+    collection = review.collection(generation.run_id)
+    first = collection["candidates"][0]
+    with pytest.raises(ReviewError, match="CANDIDATE_HASH_CHANGED"):
+        review.review(
+            generation.run_id,
+            first["case_id"],
+            reviewer_id="portfolio-owner",
+            decision="approve",
+            automation_disposition="automated",
+            disposition_reason="Selected for the MVP baseline.",
+            comment="Reviewed against the formal requirement.",
+            expected_content_hash="0" * 64,
+        )
+    review.review(
+        generation.run_id,
+        first["case_id"],
+        reviewer_id="portfolio-owner",
+        decision="request_changes",
+        automation_disposition="deferred",
+        disposition_reason="Requires revision before MVP automation.",
+        comment="Clarify this candidate before approval.",
+        expected_content_hash=first["content_hash"],
+    )
+    with pytest.raises(ReviewError, match="COLLECTION_NOT_FULLY_CLASSIFIED"):
+        review.freeze(
+            generation.run_id,
+            frozen_by="portfolio-owner",
+            environment_id="local-test",
+            executor_contract_version="test-executor@1.0.0",
+        )
+
+
+def test_phase6_approves_complete_collection_and_atomically_freezes_snapshots(
+    formal_database: PluginDatabase,
+) -> None:
+    generation = GenerationService(formal_database).start(
+        PROJECT_ID, MockLLMProvider(), "phase6-freeze"
+    )
+    service = ReviewService(formal_database)
+    collection = service.collection(generation.run_id)
+    classification_plan = service.mvp_classification_plan(generation.run_id)
+    assert classification_plan["counts"] == {"automated": 10, "manual": 12, "deferred": 24}
+    versioned_case_id = "TC-API-AUTH-REG-005"
+    versioned_approval_ids: list[str] = []
+    for item in collection["candidates"]:
+        plan_item = next(
+            row for row in classification_plan["candidates"] if row["case_id"] == item["case_id"]
+        )
+        if item["case_id"] == versioned_case_id:
+            original_approval = service.review(
+                generation.run_id,
+                item["case_id"],
+                reviewer_id="portfolio-owner",
+                decision="approve",
+                automation_disposition="automated",
+                disposition_reason="Initial immutable MVP approval.",
+                comment="This v1 approval remains historical evidence.",
+                expected_content_hash=item["content_hash"],
+            )
+            versioned_approval_ids.append(original_approval["approved_test_case_version_id"])
+            service.review(
+                generation.run_id,
+                item["case_id"],
+                reviewer_id="portfolio-owner",
+                decision="request_changes",
+                automation_disposition="deferred",
+                disposition_reason="A later executability review requires human revision.",
+                comment="Preserve v1 and request an executable revision.",
+                expected_content_hash=item["content_hash"],
+            )
+            revised = deepcopy(item["candidate"])
+            revised["objective"] = (
+                str(revised["objective"])
+                + " Verify the requirement oracle, not defective behavior."
+            )
+            revision = service.create_human_revision(
+                generation.run_id,
+                item["case_id"],
+                revised_by="portfolio-owner",
+                revision_reason="Align the executable objective while preserving the original.",
+                expected_content_hash=item["content_hash"],
+                candidate=revised,
+            )
+            assert revision["executability_findings"] == []
+            result = service.review(
+                generation.run_id,
+                item["case_id"],
+                reviewer_id="portfolio-owner",
+                decision="approve",
+                automation_disposition="automated",
+                disposition_reason="Latest executable human revision selected for MVP.",
+                comment="Approve immutable v2 after deterministic validation.",
+                expected_content_hash=revision["content_hash"],
+                human_revision_id=revision["human_revision_id"],
+            )
+            versioned_approval_ids.append(result["approved_test_case_version_id"])
+            with pytest.raises(ReviewError, match="APPROVED_CONTENT_ALREADY_EXISTS"):
+                service.review(
+                    generation.run_id,
+                    item["case_id"],
+                    reviewer_id="portfolio-owner",
+                    decision="approve",
+                    automation_disposition="automated",
+                    disposition_reason="Duplicate approval must be rejected.",
+                    comment="Duplicate immutable revision approval.",
+                    expected_content_hash=revision["content_hash"],
+                    human_revision_id=revision["human_revision_id"],
+                )
+            continue
+        result = service.review(
+            generation.run_id,
+            item["case_id"],
+            reviewer_id="portfolio-owner",
+            decision="approve",
+            automation_disposition=plan_item["proposed_disposition"],
+            disposition_reason=plan_item["disposition_reason"],
+            comment="Approved after deterministic contract and trace review.",
+            expected_content_hash=item["content_hash"],
+        )
+        if plan_item["proposed_disposition"] == "automated":
+            assert result["approved_test_case_version_id"]
+            assert len(result["approved_content_hash"]) == 64
+        else:
+            assert result["approved_test_case_version_id"] is None
+    frozen = service.freeze(
+        generation.run_id,
+        frozen_by="portfolio-owner",
+        environment_id="local-test",
+        executor_contract_version="test-executor@1.0.0",
+    )
+    assert frozen.status == "frozen"
+    assert frozen.snapshot_count == 10
+    assert len(frozen.baseline_hash) == 64
+    baseline = service.baseline(frozen.baseline_id)
+    assert baseline["collection_hash"] == generation.collection_hash
+    assert len(baseline["snapshots"]) == 10
+    versions = formal_database.fetch_all(
+        "SELECT approved_test_case_version_id,case_version FROM approved_test_case_versions "
+        "WHERE case_id=:case ORDER BY case_version",
+        {"case": versioned_case_id},
+    )
+    assert [row["case_version"] for row in versions] == [1, 2]
+    assert [row["approved_test_case_version_id"] for row in versions] == versioned_approval_ids
+    selected = [
+        item for item in baseline["snapshots"] if item["snapshot"]["case_id"] == versioned_case_id
+    ]
+    assert len(selected) == 1
+    assert selected[0]["snapshot"]["case_version"] == 2
+    assert {item["snapshot"]["case"]["review_status"] for item in baseline["snapshots"]} == {
+        "approved"
+    }
+    assert all(item["snapshot"]["requirement_trace"] for item in baseline["snapshots"])
+    again = service.freeze(
+        generation.run_id,
+        frozen_by="portfolio-owner",
+        environment_id="local-test",
+        executor_contract_version="test-executor@1.0.0",
+    )
+    assert again == frozen
+
+
+def test_phase6_records_reject_without_approval_and_preserves_immutable_history(
+    formal_database: PluginDatabase,
+) -> None:
+    generation = GenerationService(formal_database).start(
+        PROJECT_ID, MockLLMProvider(), "phase6-reject"
+    )
+    service = ReviewService(formal_database)
+    first = service.collection(generation.run_id)["candidates"][0]
+    result = service.review(
+        generation.run_id,
+        first["case_id"],
+        reviewer_id="portfolio-owner",
+        decision="reject",
+        automation_disposition="deferred",
+        disposition_reason="Not selected for MVP automation.",
+        comment="Rejected with an explicit review rationale.",
+        expected_content_hash=first["content_hash"],
+    )
+    assert result["approved_test_case_version_id"] is None
+    review_id = result["review_id"]
+    with pytest.raises(IntegrityError, match="reviews are immutable"):
+        formal_database.execute(
+            "UPDATE test_case_reviews SET comment='changed' WHERE test_case_review_id=:id",
+            {"id": review_id},
+        )
+
+
+def test_phase6_executability_blocks_approval_but_allows_later_request_changes(
+    formal_database: PluginDatabase,
+) -> None:
+    generation = GenerationService(formal_database).start(
+        PROJECT_ID, MockLLMProvider(), "phase6-executability"
+    )
+    service = ReviewService(formal_database)
+    first = service.collection(generation.run_id)["candidates"][0]
+    service.review(
+        generation.run_id,
+        first["case_id"],
+        reviewer_id="portfolio-owner",
+        decision="approve",
+        automation_disposition="automated",
+        disposition_reason="Selected for the MVP baseline.",
+        comment="Initial review decision retained as audit history.",
+        expected_content_hash=first["content_hash"],
+    )
+    changed = service.review(
+        generation.run_id,
+        first["case_id"],
+        reviewer_id="portfolio-owner",
+        decision="request_changes",
+        automation_disposition="deferred",
+        disposition_reason="Requires revision before automation.",
+        comment="A later review can supersede approval without deleting it.",
+        expected_content_hash=first["content_hash"],
+    )
+    assert changed["decision"] == "request_changes"
+    reviews = formal_database.fetch_one(
+        "SELECT COUNT(*) AS count FROM test_case_reviews WHERE test_case_candidate_id=:candidate",
+        {"candidate": first["test_case_candidate_id"]},
+    )
+    assert reviews == {"count": 2}
+
+
+def test_phase6_executability_report_covers_complete_collection(
+    formal_database: PluginDatabase,
+) -> None:
+    generation = GenerationService(formal_database).start(
+        PROJECT_ID, MockLLMProvider(), "phase6-executability-report"
+    )
+    report = ReviewService(formal_database).executability_report(generation.run_id)
+    assert report["candidate_count"] == 46
+    assert report["passed_count"] == 46
+    assert report["failed_count"] == 0
+
+
+def test_phase6_human_revision_preserves_original_and_gates_automation(
+    formal_database: PluginDatabase,
+) -> None:
+    generation = GenerationService(formal_database).start(
+        PROJECT_ID, MockLLMProvider(), "phase6-human-revision"
+    )
+    service = ReviewService(formal_database)
+    item = next(
+        row
+        for row in service.collection(generation.run_id)["candidates"]
+        if row["case_id"] == "TC-UI-AUTH-REG-005"
+    )
+    invalid = deepcopy(item["candidate"])
+    invalid["type_details"]["route"] = "/logout"
+    invalid_revision = service.create_human_revision(
+        generation.run_id,
+        item["case_id"],
+        revised_by="portfolio-owner",
+        revision_reason="Preserve the invalid route as reviewed revision evidence.",
+        expected_content_hash=item["content_hash"],
+        candidate=invalid,
+    )
+    assert invalid_revision["executability_findings"][0]["code"] == "UI_ROUTE_NOT_IN_CONTRACT"
+    with pytest.raises(ReviewError, match="CANDIDATE_NOT_EXECUTABLE"):
+        service.review(
+            generation.run_id,
+            item["case_id"],
+            reviewer_id="portfolio-owner",
+            decision="approve",
+            automation_disposition="automated",
+            disposition_reason="Attempted automated classification.",
+            comment="This must be rejected by the executable gate.",
+            expected_content_hash=invalid_revision["content_hash"],
+            human_revision_id=invalid_revision["human_revision_id"],
+        )
+    revised = deepcopy(item["candidate"])
+    revised["type_details"].update(
+        {
+            "route": "/profile",
+            "locator_intents": [{"strategy": "role", "value": "Logout"}],
+            "user_actions": ["click:role:Logout"],
+        }
+    )
+    valid_revision = service.create_human_revision(
+        generation.run_id,
+        item["case_id"],
+        revised_by="portfolio-owner",
+        revision_reason="Use the implemented profile route and accessible Logout control.",
+        expected_content_hash=item["content_hash"],
+        candidate=revised,
+    )
+    assert valid_revision["executability_findings"] == []
+    approved = service.review(
+        generation.run_id,
+        item["case_id"],
+        reviewer_id="portfolio-owner",
+        decision="approve",
+        automation_disposition="automated",
+        disposition_reason="Deterministic MVP UI protocol is now satisfied.",
+        comment="Approved only after the human revision passed executability.",
+        expected_content_hash=valid_revision["content_hash"],
+        human_revision_id=valid_revision["human_revision_id"],
+    )
+    assert approved["approved_test_case_version_id"]
+    original = service.collection(generation.run_id)["candidates"]
+    assert (
+        next(row for row in original if row["case_id"] == item["case_id"])["content_hash"]
+        == item["content_hash"]
+    )
+
+
+def test_phase6_http_boundary_exposes_review_and_freeze_without_execution(
+    formal_database: PluginDatabase, client: FlaskClient
+) -> None:
+    generation = GenerationService(formal_database).start(
+        PROJECT_ID, MockLLMProvider(), "phase6-api"
+    )
+    response = client.get(f"/api/v1/test-generation-runs/{generation.run_id}/reviews")
+    assert response.status_code == 200
+    candidates = response.get_json()["data"]["candidates"]
+    first = candidates[0]
+    reviewed = client.post(
+        f"/api/v1/test-generation-runs/{generation.run_id}/candidates/{first['case_id']}/reviews",
+        json={
+            "reviewer_id": "portfolio-owner",
+            "decision": "approve",
+            "automation_disposition": "automated",
+            "disposition_reason": "Selected for the MVP baseline.",
+            "comment": "Approved through the versioned review API.",
+            "expected_content_hash": first["content_hash"],
+        },
+    )
+    assert reviewed.status_code == 201
+    blocked = client.post(
+        f"/api/v1/test-generation-runs/{generation.run_id}/frozen-baselines",
+        json={
+            "frozen_by": "portfolio-owner",
+            "environment_id": "local-test",
+            "executor_contract_version": "test-executor@1.0.0",
+        },
+    )
+    assert blocked.status_code == 409
+    assert "COLLECTION_NOT_FULLY_CLASSIFIED" in blocked.get_json()["error"]["message"]
 
 
 def test_idempotency_never_repeats_successful_batches(
@@ -623,6 +1034,10 @@ def test_candidate_schema_failure_is_not_classified_as_provider_error(
     ("error_type", "eligible"),
     [
         ("INTENT_SCHEMA_VALIDATION", True),
+        (
+            "CANDIDATE_EXECUTABILITY_INVALID:UI_ROUTE_NOT_IN_CONTRACT:/type_details/route",
+            True,
+        ),
         ("JSON_PARSE_ERROR", False),
         ("OUTPUT_TRUNCATED", False),
         ("COMPILATION_ERROR", False),

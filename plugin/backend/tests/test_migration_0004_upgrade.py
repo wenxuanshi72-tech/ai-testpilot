@@ -6,7 +6,7 @@ from pathlib import Path
 from plugin.backend.app.database import MIGRATIONS_DIR, PluginDatabase
 
 
-def test_0004_upgrades_an_existing_0003_database_without_phase6_tables(
+def test_existing_0003_database_upgrades_through_phase6(
     tmp_path: Path,
 ) -> None:
     database_path = tmp_path / "upgrade-from-0003.db"
@@ -23,7 +23,7 @@ def test_0004_upgrades_an_existing_0003_database_without_phase6_tables(
             )
     database = PluginDatabase(f"sqlite:///{database_path.as_posix()}")
     database.migrate()
-    assert database.fetch_one("SELECT COUNT(*) AS count FROM schema_migrations") == {"count": 5}
+    assert database.fetch_one("SELECT COUNT(*) AS count FROM schema_migrations") == {"count": 7}
     assert database.fetch_one("PRAGMA integrity_check") == {"integrity_check": "ok"}
     assert database.fetch_all("PRAGMA foreign_key_check") == []
     tables = {
@@ -37,4 +37,5 @@ def test_0004_upgrades_an_existing_0003_database_without_phase6_tables(
         "frozen_baselines",
         "frozen_baseline_members",
         "immutable_execution_snapshots",
-    }.isdisjoint(tables)
+        "test_case_human_revisions",
+    } <= tables

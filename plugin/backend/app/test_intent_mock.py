@@ -66,8 +66,8 @@ def _intent(slot: dict[str, Any], snapshot: dict[str, Any]) -> dict[str, Any]:
         ],
         "expected_outcomes": expected,
         "cleanup_intent": {
-            "required": True,
-            "instructions": ["Remove only data created by the future isolated execution."],
+            "required": False,
+            "instructions": [],
         },
         "tags": list(dict.fromkeys([case_type, scenario, *requirement.get("tags", [])]))[:20],
         "type_intent": {"api": _api(seeded), "ui": _ui(seeded), "manual": _manual(requirement)}[
@@ -97,9 +97,9 @@ def _ui(seeded: bool) -> dict[str, Any]:
         "viewport_intent": "responsive-matrix",
         "locator_intents": [
             {"strategy": "label", "value": "Username"},
-            {"strategy": "role", "value": "button"},
+            {"strategy": "role", "value": "Submit"},
         ],
-        "user_actions": ["Enter isolated fixture data and submit once."],
+        "user_actions": ["fill:label:Username", "click:role:Submit"],
         "visible_assertions": ["Accessible requirement-aligned feedback is visible."],
         "url_assertions": [f"Navigation from {route} follows the approved requirement."],
         "session_assertions": ["Authentication state is not stored in browser storage."],

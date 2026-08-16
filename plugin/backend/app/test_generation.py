@@ -14,6 +14,11 @@ from jsonschema import ValidationError as JsonSchemaError
 from sqlalchemy import text
 
 from plugin.backend.app.analysis import TruncationError, parse_json_object
+from plugin.backend.app.candidate_executability import (
+    EXECUTABILITY_VALIDATOR_VERSION,
+    ExecutabilityFinding,
+    validate_candidate_executability,
+)
 from plugin.backend.app.database import PluginDatabase
 from plugin.backend.app.ids import new_id
 from plugin.backend.app.providers import (
@@ -109,6 +114,14 @@ class CandidateCompilationError(TestGenerationError):
     pass
 
 
+class CandidateExecutabilityError(TestGenerationError):
+    def __init__(self, case_id: str, findings: list[ExecutabilityFinding]) -> None:
+        self.case_id = case_id
+        self.findings = tuple(findings)
+        first = findings[0]
+        super().__init__(f"CANDIDATE_EXECUTABILITY_INVALID:{first.code}:{first.path}")
+
+
 @dataclass
 class RunCallCounters:
     initial_call_count: int = 0
@@ -120,7 +133,9 @@ class RunCallCounters:
 def is_structure_correction_eligible(
     error_type: str, response: ProviderResponse | None = None
 ) -> bool:
-    if error_type == "INTENT_SCHEMA_VALIDATION":
+    if error_type == "INTENT_SCHEMA_VALIDATION" or error_type.startswith(
+        "CANDIDATE_EXECUTABILITY_INVALID:"
+    ):
         return True
     if error_type != "JSON_PARSE_ERROR" or response is None:
         return False
@@ -773,6 +788,12 @@ class TestGenerationService:
                 )
                 for intent in accepted["intents"]
             )
+            for candidate in candidates:
+                executability_findings = validate_candidate_executability(candidate)
+                if executability_findings:
+                    raise TestGenerationError(
+                        "CANDIDATE_EXECUTABILITY_INVALID:" + executability_findings[0].code
+                    )
         except TestGenerationError as error:
             return CheckpointQualification(batch.batch_key, False, _safe_error(error))
         return CheckpointQualification(
@@ -919,6 +940,18 @@ class TestGenerationService:
                     ]
                 except Exception as error:
                     code = _safe_error(error)
+                    if isinstance(error, CandidateExecutabilityError):
+                        self._audit(
+                            run_id,
+                            batch_id,
+                            "candidate_executability_failed",
+                            "failed",
+                            {
+                                "case_id": error.case_id,
+                                "validator_version": EXECUTABILITY_VALIDATOR_VERSION,
+                                "findings": [item.as_dict() for item in error.findings],
+                            },
+                        )
                     schema_error = _caused_by_schema_error(error)
                     if schema_error is not None:
                         self._audit(
@@ -1123,6 +1156,9 @@ class TestGenerationService:
         except TestIntentCompilationError as error:
             raise CandidateCompilationError("COMPILATION_ERROR") from error
         self._validate_candidate_domain(candidate, batch)
+        executability_findings = validate_candidate_executability(candidate)
+        if executability_findings:
+            raise CandidateExecutabilityError(str(candidate["case_id"]), executability_findings)
         return candidate
 
     def _validate_candidate_domain(self, candidate: dict[str, Any], batch: GenerationBatch) -> None:
@@ -1180,6 +1216,11 @@ class TestGenerationService:
         scenarios: dict[str, str] = {}
         findings: list[dict[str, Any]] = []
         for case in cases:
+            executability_findings = validate_candidate_executability(case)
+            if executability_findings:
+                raise TestGenerationError(
+                    "CANDIDATE_EXECUTABILITY_INVALID:" + executability_findings[0].code
+                )
             signature = _duplicate_signature(case)
             if signature in signatures:
                 raise TestGenerationError("DETERMINISTIC_DUPLICATE_CASE")

@@ -12,7 +12,7 @@ from plugin.backend.app.providers import ProviderMetadata
 from plugin.backend.app.test_generation_prompts import TEST_GENERATION_PROMPT_VERSION
 from plugin.backend.app.test_generation_schemas import TEST_CASE_SCHEMA_VERSION, TestCaseSchemas
 
-TEST_INTENT_COMPILER_VERSION = "deterministic-candidate-compiler@2.31.0"
+TEST_INTENT_COMPILER_VERSION = "deterministic-candidate-compiler@2.32.0"
 TEST_INTENT_COMPATIBILITY_VERSION = "test-intent-compatibility@1.29.0"
 SCENARIO_TO_CATEGORY = {
     "positive": "positive",
@@ -1082,6 +1082,10 @@ class DeterministicCandidateCompiler:
             "Registration is rejected with HTTP 400 because the username has fewer "
             "than six characters."
         ]
+        candidate["objective"] = (
+            "Verify the registration API rejects the five-character username z1234 because the "
+            "formal requirement requires at least six characters."
+        )
         candidate["tags"] = list(
             dict.fromkeys(
                 [

@@ -24,6 +24,7 @@ from plugin.backend.app.test_generation_prompts import (
     TestGenerationPromptRegistry as GenerationPromptRegistry,
 )
 from plugin.backend.app.test_intent_compiler import TEST_INTENT_COMPILER_VERSION
+from plugin.backend.app.test_review import TestReviewService as ReviewService
 from plugin.backend.real_test_generation_acceptance import AcceptanceLimits, build_dry_run_report
 from plugin.backend.tests.test_test_generation import (
     PROJECT_ID,
@@ -210,6 +211,35 @@ def test_checkpoint_schema_system_error_terminates_recovery(
     )
     assert child.status == "failed"
     assert provider.call_count == 0
+
+
+def test_reviewed_collection_with_request_changes_is_a_valid_rework_source(
+    formal_database: PluginDatabase,
+) -> None:
+    parent = GenerationService(formal_database, max_retries=0).start(
+        PROJECT_ID, RealLabeledMockProvider(), "review-rework-parent"
+    )
+    review = ReviewService(formal_database)
+    candidate = review.collection(parent.run_id)["candidates"][0]
+    review.review(
+        parent.run_id,
+        candidate["case_id"],
+        reviewer_id="portfolio-owner",
+        decision="request_changes",
+        automation_disposition="deferred",
+        disposition_reason="Reviewed collection requires regeneration.",
+        comment="Regenerate this reviewed collection before any freeze.",
+        expected_content_hash=candidate["content_hash"],
+    )
+    report = build_dry_run_report(
+        formal_database,
+        project_id=PROJECT_ID,
+        limits=AcceptanceLimits(40, 8, 250_000, 3072, 15),
+        resume_run_id=parent.run_id,
+        recovery_reason="TEST_INTENT_COMPILER_REDESIGN",
+    )
+    assert report["total_batch_count"] == 13
+    assert report["provider_calls"] == 0
 
 
 def test_failed_run_can_resume_only_compatible_successful_batches(

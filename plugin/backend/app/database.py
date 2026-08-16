@@ -33,26 +33,42 @@ class PluginDatabase:
     def migrate(self) -> None:
         if self.url.startswith("sqlite:///"):
             Path(self.url.removeprefix("sqlite:///")).parent.mkdir(parents=True, exist_ok=True)
-        with self.engine.begin() as connection:
-            connection.execute(
-                text(
-                    "CREATE TABLE IF NOT EXISTS schema_migrations ("
-                    "version TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"
-                )
-            )
-            applied = {
-                row[0] for row in connection.execute(text("SELECT version FROM schema_migrations"))
-            }
-            for migration in sorted(MIGRATIONS_DIR.glob("*.sql")):
-                if migration.stem in applied:
-                    continue
-                for statement in _split_sql(migration.read_text(encoding="utf-8")):
-                    if statement:
-                        connection.exec_driver_sql(statement)
-                connection.execute(
-                    text("INSERT INTO schema_migrations(version) VALUES (:version)"),
-                    {"version": migration.stem},
-                )
+        with self.engine.connect() as connection:
+            sqlite = self.url.startswith("sqlite")
+            if sqlite:
+                connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+                connection.commit()
+            try:
+                with connection.begin():
+                    connection.execute(
+                        text(
+                            "CREATE TABLE IF NOT EXISTS schema_migrations ("
+                            "version TEXT PRIMARY KEY, applied_at TEXT NOT NULL "
+                            "DEFAULT CURRENT_TIMESTAMP)"
+                        )
+                    )
+                    applied = {
+                        row[0]
+                        for row in connection.execute(text("SELECT version FROM schema_migrations"))
+                    }
+                    for migration in sorted(MIGRATIONS_DIR.glob("*.sql")):
+                        if migration.stem in applied:
+                            continue
+                        for statement in _split_sql(migration.read_text(encoding="utf-8")):
+                            if statement:
+                                connection.exec_driver_sql(statement)
+                        connection.execute(
+                            text("INSERT INTO schema_migrations(version) VALUES (:version)"),
+                            {"version": migration.stem},
+                        )
+                if sqlite:
+                    violations = connection.exec_driver_sql("PRAGMA foreign_key_check").fetchall()
+                    if violations:
+                        raise RuntimeError("MIGRATION_FOREIGN_KEY_CHECK_FAILED")
+            finally:
+                if sqlite:
+                    connection.commit()
+                    connection.exec_driver_sql("PRAGMA foreign_keys=ON")
 
     @contextmanager
     def transaction(self) -> Iterator[Connection]:

@@ -2,12 +2,13 @@
 
 ## Current result
 
-**MVP IMPLEMENTATION: OFFLINE PASS; HUMAN CLASSIFICATION/FREEZE: PENDING**
+**PHASE 6 REAL MVP ACCEPTANCE: PASS**
 
 The Phase 6 review, approval-version, frozen-baseline, immutable-snapshot, and audit capabilities are
-implemented. Automated acceptance uses isolated Mock-provider candidate data and a clearly labelled
-test reviewer. The real Phase 5B collection has now received an evidence-seeking executability
-audit; it is not approved and must not be frozen.
+implemented and accepted against the real Phase 5B collection. All 46 candidates have an
+attributable latest classification. Eight human revisions passed Candidate Schema and
+`candidate-executability@1.0.0`; ten approved automated versions were frozen into one immutable MVP
+baseline. No test was executed during Phase 6.
 
 ## Implemented capabilities
 
@@ -43,30 +44,67 @@ audit; it is not approved and must not be frozen.
 | SQLite foreign-key check | 0 findings |
 | `git diff --check` | PASS |
 
-Automated freeze acceptance used isolated Mock-provider candidate data and the explicit test-only
-reviewer `portfolio-owner`. No automated test result is represented as a real human review.
+Automated regression tests continue to use isolated Mock-provider data and the explicit test-only
+reviewer `portfolio-owner`. The real classification and freeze described below were explicitly
+confirmed by the project owner and are not represented as test execution results.
 
 ## Real collection audit
 
-Run `TGR-0A4E9521B2B444DD8FA72C1FCB362EDF` was audited in full: 46 candidates inspected, 19 passed
-the deterministic preflight, and 27 received append-only `request_changes` decisions from
-`codex-agent-audit`. The preflight found unstructured setup/cleanup operations, natural-language UI
-actions, inaccessible role-only locators, nonexistent API/UI targets, and the contradictory seeded
-defect objective. The earlier approval record remains immutable audit history; a later change request
-prevents it from satisfying the latest-decision freeze gate.
+Run `TGR-0A4E9521B2B444DD8FA72C1FCB362EDF` has 46/46 real latest classifications:
 
-No frozen baseline or execution snapshot was created. After the full-collection approach exposed
-unnecessary portfolio complexity, Phase 6 adopted `portfolio-mvp-baseline@1.0.0`. A read-only plan
-for the unchanged real collection proposes 10 automated, 12 manual, and 24 deferred candidates.
-The plan is not a human decision and `ready_to_freeze` remains false until the 10 selected cases are
-reviewed/revised, executable, and explicitly approved.
+- `approve + automated`: 10
+- `approve + manual`: 12
+- `approve + deferred`: 5
+- `request_changes + deferred`: 19
+
+The selected MVP contains eight immutable human revisions and two unchanged executable original
+candidates (`TC-API-REQ-BAT-002-5` and `TC-API-REQ-REG-004`). Manual and deferred candidates are
+reviewed design evidence only and are excluded from execution snapshots. The unsupported
+`TC-UI-REQ-LOGOUT-001` remains `request_changes + deferred` and has no human revision.
+
+The protected seeded-defect API case preserves its immutable historical approval v1
+`ATCV-87E6BE70B91D44DD9AE34E5CA70158C8`. Its validated human revision was approved as v2
+`ATCV-12436CC45EE54ACCB1B73CD0FD7B9FB1`; the formal oracle remains HTTP 400 for username `z1234`.
+The corresponding UI v2 also retains the formal rejection oracle. The intentionally defective SUT
+behavior remains unchanged for deterministic discovery in the execution phase.
+
+## Real frozen MVP baseline
+
+- Baseline ID: `FBL-5BCEA5DA11144E9BB47C545AD73919DD`
+- Baseline version: 1
+- Baseline hash: `142765b5e50464455161bfdb65520147251aebdde6479de5a25a16a0d1a7c722`
+- Status: `frozen`
+- Frozen by: `auroia`
+- Environment: `local-windows-demo`
+- Executor contract: `test-executor@1.0.0`
+- Approved automated members: 10
+- Immutable execution snapshots: 10
+
+Snapshot cases:
+
+1. `TC-API-AUTH-REG-005` v2
+2. `TC-API-REQ-AUTH-001` v2
+3. `TC-API-REQ-BAT-002-5` v1
+4. `TC-API-REQ-LOGIN-001` v2
+5. `TC-API-REQ-LOGOUT-001` v2
+6. `TC-API-REQ-REG-003` v2
+7. `TC-API-REQ-REG-004` v1
+8. `TC-UI-AUTH-REG-005` v2
+9. `TC-UI-REQ-LOGIN-001` v2
+10. `TC-UI-REQ-REG-002` v2
+
+The baseline contains no manual or deferred member. SQLite reported `integrity_check=ok` and zero
+foreign-key violations after the single transactional freeze.
 
 ## Boundary
 
 - DeepSeek calls: 0
 - New generation runs: 0
-- Real review decisions appended: 27 `request_changes`
-- Frozen baselines and execution snapshots: 0
+- Real latest classifications: 46/46
+- Human revisions: 8
+- Approved automated versions selected for MVP: 10
+- Frozen baselines: 1
+- Immutable execution snapshots: 10
 - Test execution: not implemented or performed
 - API/UI verdicts: 0
 - Evidence, bugs, and reports: 0

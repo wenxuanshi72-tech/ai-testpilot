@@ -14,6 +14,7 @@ from jsonschema import ValidationError as JsonSchemaError
 from sqlalchemy import text
 
 from plugin.backend.app.analysis import TruncationError, parse_json_object
+from plugin.backend.app.candidate_executability import validate_candidate_executability
 from plugin.backend.app.database import PluginDatabase
 from plugin.backend.app.ids import new_id
 from plugin.backend.app.providers import (
@@ -773,6 +774,12 @@ class TestGenerationService:
                 )
                 for intent in accepted["intents"]
             )
+            for candidate in candidates:
+                executability_findings = validate_candidate_executability(candidate)
+                if executability_findings:
+                    raise TestGenerationError(
+                        "CANDIDATE_EXECUTABILITY_INVALID:" + executability_findings[0].code
+                    )
         except TestGenerationError as error:
             return CheckpointQualification(batch.batch_key, False, _safe_error(error))
         return CheckpointQualification(
@@ -1180,6 +1187,11 @@ class TestGenerationService:
         scenarios: dict[str, str] = {}
         findings: list[dict[str, Any]] = []
         for case in cases:
+            executability_findings = validate_candidate_executability(case)
+            if executability_findings:
+                raise TestGenerationError(
+                    "CANDIDATE_EXECUTABILITY_INVALID:" + executability_findings[0].code
+                )
             signature = _duplicate_signature(case)
             if signature in signatures:
                 raise TestGenerationError("DETERMINISTIC_DUPLICATE_CASE")

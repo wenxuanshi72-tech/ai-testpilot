@@ -306,6 +306,16 @@ def phase6_review_collection(run_id: str) -> tuple[Any, int]:
     return jsonify({"data": collection, "meta": {"request_id": request_id()}}), 200
 
 
+@api.get("/test-generation-runs/<run_id>/executability")
+def phase6_executability_report(run_id: str) -> tuple[Any, int]:
+    try:
+        report = _test_review_service().executability_report(run_id)
+    except TestReviewError as error:
+        status = 404 if str(error) == "GENERATION_RUN_NOT_FOUND" else 409
+        raise ApiError("EXECUTABILITY_REPORT_UNAVAILABLE", str(error), status) from error
+    return jsonify({"data": report, "meta": {"request_id": request_id()}}), 200
+
+
 @api.post("/test-generation-runs/<run_id>/candidates/<case_id>/reviews")
 def phase6_review_candidate(run_id: str, case_id: str) -> tuple[Any, int]:
     payload = _json_object()

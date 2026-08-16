@@ -9,6 +9,11 @@ from typing import Any
 from jsonschema import ValidationError as JsonSchemaError
 from sqlalchemy import text
 
+from plugin.backend.app.candidate_executability import (
+    EXECUTABILITY_VALIDATOR_VERSION,
+    compile_session_fixtures,
+    validate_candidate_executability,
+)
 from plugin.backend.app.database import PluginDatabase
 from plugin.backend.app.ids import new_id
 from plugin.backend.app.test_review_schemas import ReviewSchemas
@@ -124,8 +129,11 @@ class TestReviewService:
             "WHERE test_case_candidate_id=:candidate",
             {"candidate": candidate["test_case_candidate_id"]},
         )
-        if already_approved:
+        if already_approved and decision == "approve":
             raise TestReviewError("APPROVED_VERSION_IS_IMMUTABLE")
+        findings = validate_candidate_executability(payload)
+        if decision == "approve" and findings:
+            raise TestReviewError("CANDIDATE_NOT_EXECUTABLE")
         review_id = new_id("TCR")
         approved_id: str | None = None
         approved_hash: str | None = None
@@ -191,6 +199,32 @@ class TestReviewService:
             "approved_test_case_version_id": approved_id,
             "approved_content_hash": approved_hash,
             "collection_hash": run["collection_hash"],
+        }
+
+    def executability_report(self, run_id: str) -> dict[str, Any]:
+        collection = self.collection(run_id)
+        results: list[dict[str, Any]] = []
+        failed = 0
+        for item in collection["candidates"]:
+            findings = validate_candidate_executability(item["candidate"])
+            if findings:
+                failed += 1
+            results.append(
+                {
+                    "case_id": item["case_id"],
+                    "case_type": item["case_type"],
+                    "status": "failed" if findings else "passed",
+                    "findings": [finding.as_dict() for finding in findings],
+                }
+            )
+        return {
+            "generation_run_id": run_id,
+            "validator_version": EXECUTABILITY_VALIDATOR_VERSION,
+            "candidate_count": len(results),
+            "passed_count": len(results) - failed,
+            "failed_count": failed,
+            "approval_ready": failed == 0,
+            "results": results,
         }
 
     def freeze(
@@ -290,6 +324,7 @@ class TestReviewService:
                 "case_version": int(item["case_version"]),
                 "approved_content_hash": item["content_hash"],
                 "requirement_trace": trace,
+                "fixtures": compile_session_fixtures(json.loads(str(item["payload_json"]))),
                 "case": json.loads(str(item["payload_json"])),
             }
             self.schemas.validate_snapshot(snapshot)

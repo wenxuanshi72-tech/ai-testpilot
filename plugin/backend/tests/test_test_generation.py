@@ -554,6 +554,50 @@ def test_phase6_records_reject_without_approval_and_preserves_immutable_history(
         )
 
 
+def test_phase6_executability_blocks_approval_but_allows_later_request_changes(
+    formal_database: PluginDatabase,
+) -> None:
+    generation = GenerationService(formal_database).start(
+        PROJECT_ID, MockLLMProvider(), "phase6-executability"
+    )
+    service = ReviewService(formal_database)
+    first = service.collection(generation.run_id)["candidates"][0]
+    service.review(
+        generation.run_id,
+        first["case_id"],
+        reviewer_id="portfolio-owner",
+        decision="approve",
+        comment="Initial review decision retained as audit history.",
+        expected_content_hash=first["content_hash"],
+    )
+    changed = service.review(
+        generation.run_id,
+        first["case_id"],
+        reviewer_id="portfolio-owner",
+        decision="request_changes",
+        comment="A later review can supersede approval without deleting it.",
+        expected_content_hash=first["content_hash"],
+    )
+    assert changed["decision"] == "request_changes"
+    reviews = formal_database.fetch_one(
+        "SELECT COUNT(*) AS count FROM test_case_reviews WHERE test_case_candidate_id=:candidate",
+        {"candidate": first["test_case_candidate_id"]},
+    )
+    assert reviews == {"count": 2}
+
+
+def test_phase6_executability_report_covers_complete_collection(
+    formal_database: PluginDatabase,
+) -> None:
+    generation = GenerationService(formal_database).start(
+        PROJECT_ID, MockLLMProvider(), "phase6-executability-report"
+    )
+    report = ReviewService(formal_database).executability_report(generation.run_id)
+    assert report["candidate_count"] == 46
+    assert report["passed_count"] == 46
+    assert report["failed_count"] == 0
+
+
 def test_phase6_http_boundary_exposes_review_and_freeze_without_execution(
     formal_database: PluginDatabase, client: FlaskClient
 ) -> None:

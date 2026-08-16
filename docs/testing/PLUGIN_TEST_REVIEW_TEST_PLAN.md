@@ -20,6 +20,14 @@ one transaction.
 10. Database triggers prevent review, approval, baseline, member, snapshot, and audit mutation.
 11. API errors are deterministic and do not leak candidate or secret data.
 12. No test executor, result, evidence, bug, or report record is created.
+13. Approval rejects `N/A`, natural-language execution operations, nonexistent API/UI targets,
+    unusable UI locators/actions, unmarked sensitive data, and objective/oracle/status conflicts.
+14. Expired and revoked sessions compile only to enumerated deterministic fixtures.
+15. A later `request_changes` decision is append-only and supersedes an earlier approval for the
+    latest-decision freeze gate without deleting either record.
+16. All 46 candidates can be preflighted in one read-only report before approval.
+17. Checkpoint dry-run and runtime reuse apply the same current executability validator; ordinary
+    incompatibility falls back to Provider generation and cannot be promoted.
 
 ## Gates
 

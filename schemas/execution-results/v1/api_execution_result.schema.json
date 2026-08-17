@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-testpilot.local/schemas/execution-results/v1/api_execution_result.schema.json",
+  "title": "AI TestPilot deterministic API execution result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "executor_version", "case_id", "case_version", "status",
+    "failure_type", "expected_status", "actual_status", "duration_ms",
+    "assertions", "requirement_ids", "evidence_id", "evidence_hash"
+  ],
+  "properties": {
+    "schema_version": { "const": "api-execution-result@1.0.0" },
+    "executor_version": { "const": "api-executor@1.0.0" },
+    "case_id": { "type": "string", "pattern": "^TC-[A-Z0-9-]+$" },
+    "case_version": { "type": "integer", "minimum": 1 },
+    "status": { "enum": ["PASS", "FAIL", "BLOCKED", "ERROR", "SKIPPED"] },
+    "failure_type": { "type": ["string", "null"], "maxLength": 80 },
+    "expected_status": { "type": ["integer", "null"], "minimum": 100, "maximum": 599 },
+    "actual_status": { "type": ["integer", "null"], "minimum": 100, "maximum": 599 },
+    "duration_ms": { "type": "integer", "minimum": 0 },
+    "assertions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["assertion", "passed", "expected", "actual"],
+        "properties": {
+          "assertion": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "passed": { "type": "boolean" },
+          "expected": {},
+          "actual": {}
+        }
+      }
+    },
+    "requirement_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^REQ-[A-Z0-9-]+$" }
+    },
+    "evidence_id": { "type": "string", "pattern": "^EVD-[A-F0-9]{32}$" },
+    "evidence_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  }
+}

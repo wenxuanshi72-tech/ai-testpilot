@@ -11,6 +11,7 @@ from plugin.backend.app.analysis import (
     content_hash,
     normalize_prd,
 )
+from plugin.backend.app.api_execution import ApiExecutionError, ApiExecutionService
 from plugin.backend.app.database import PluginDatabase
 from plugin.backend.app.errors import ApiError, request_id
 from plugin.backend.app.ids import new_id
@@ -87,6 +88,10 @@ def _test_generation_service() -> TestGenerationService:
 
 def _test_review_service() -> TestReviewService:
     return TestReviewService(_database())
+
+
+def _api_execution_service() -> ApiExecutionService:
+    return ApiExecutionService(_database())
 
 
 @api.get("/health")
@@ -393,6 +398,41 @@ def phase6_frozen_baseline(baseline_id: str) -> tuple[Any, int]:
         status = 404 if str(error) == "BASELINE_NOT_FOUND" else 409
         raise ApiError("FROZEN_BASELINE_UNAVAILABLE", str(error), status) from error
     return jsonify({"data": baseline, "meta": {"request_id": request_id()}}), 200
+
+
+@api.post("/frozen-baselines/<baseline_id>/api-executions")
+def phase7_execute_api_baseline(baseline_id: str) -> tuple[Any, int]:
+    payload = _json_object()
+    environment_id = str(payload.get("environment_id", "")).strip()
+    if not environment_id:
+        raise ApiError("VALIDATION_ERROR", "environment_id is required.", 422)
+    try:
+        result = _api_execution_service().execute(
+            baseline_id,
+            environment_id=environment_id,
+        )
+    except ApiExecutionError as error:
+        status = 404 if str(error) == "BASELINE_NOT_FOUND" else 409
+        raise ApiError("API_EXECUTION_ERROR", str(error), status) from error
+    return jsonify({"data": result.__dict__, "meta": {"request_id": request_id()}}), 201
+
+
+@api.get("/api-test-runs/<run_id>")
+def phase7_api_test_run(run_id: str) -> tuple[Any, int]:
+    try:
+        result = _api_execution_service().run(run_id)
+    except ApiExecutionError as error:
+        raise ApiError("API_TEST_RUN_UNAVAILABLE", str(error), 404) from error
+    return jsonify({"data": result, "meta": {"request_id": request_id()}}), 200
+
+
+@api.get("/api-test-results/<result_id>/evidence")
+def phase7_api_test_evidence(result_id: str) -> tuple[Any, int]:
+    try:
+        result = _api_execution_service().evidence(result_id)
+    except ApiExecutionError as error:
+        raise ApiError("API_TEST_EVIDENCE_UNAVAILABLE", str(error), 404) from error
+    return jsonify({"data": result, "meta": {"request_id": request_id()}}), 200
 
 
 def _requirements_response(project_id: str, analysis_run_id: str | None) -> tuple[Any, int]:

@@ -14,6 +14,7 @@ from plugin.backend.app.analysis import (
 from plugin.backend.app.api_execution import ApiExecutionError, ApiExecutionService
 from plugin.backend.app.database import PluginDatabase
 from plugin.backend.app.errors import ApiError, request_id
+from plugin.backend.app.evidence import EvidenceError, EvidenceService
 from plugin.backend.app.ids import new_id
 from plugin.backend.app.prompts import PROMPT_VERSION, SCHEMA_VERSION, PromptRegistry
 from plugin.backend.app.providers import DeepSeekProvider, LLMProvider, MockLLMProvider
@@ -97,6 +98,10 @@ def _api_execution_service() -> ApiExecutionService:
 
 def _ui_execution_service() -> UiExecutionService:
     return UiExecutionService(_database())
+
+
+def _evidence_service() -> EvidenceService:
+    return EvidenceService(_database())
 
 
 @api.get("/health")
@@ -474,6 +479,34 @@ def phase7_ui_test_evidence(result_id: str) -> tuple[Any, int]:
         result = _ui_execution_service().evidence(result_id)
     except UiExecutionError as error:
         raise ApiError("UI_TEST_EVIDENCE_UNAVAILABLE", str(error), 404) from error
+    return jsonify({"data": result, "meta": {"request_id": request_id()}}), 200
+
+
+@api.post("/evidence-consolidations")
+def phase8_consolidate_evidence() -> tuple[Any, int]:
+    payload = _json_object()
+    api_run_id = str(payload.get("api_test_run_id", "")).strip()
+    ui_run_id = str(payload.get("ui_test_run_id", "")).strip()
+    if not api_run_id or not ui_run_id:
+        raise ApiError(
+            "VALIDATION_ERROR",
+            "api_test_run_id and ui_test_run_id are required.",
+            422,
+        )
+    try:
+        result = _evidence_service().consolidate(api_run_id, ui_run_id)
+    except EvidenceError as error:
+        status = 404 if str(error) == "SOURCE_RUN_NOT_FOUND" else 409
+        raise ApiError("EVIDENCE_CONSOLIDATION_ERROR", str(error), status) from error
+    return jsonify({"data": result, "meta": {"request_id": request_id()}}), 201
+
+
+@api.get("/evidence-consolidations/<run_id>")
+def phase8_evidence_consolidation(run_id: str) -> tuple[Any, int]:
+    try:
+        result = _evidence_service().get(run_id)
+    except EvidenceError as error:
+        raise ApiError("EVIDENCE_CONSOLIDATION_UNAVAILABLE", str(error), 404) from error
     return jsonify({"data": result, "meta": {"request_id": request_id()}}), 200
 
 

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-testpilot.local/schemas/evidence/v1/advisory_analysis.schema.json",
+  "title": "Non-authoritative AI evidence analysis",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "summary", "hypotheses", "limitations", "advisory_label"],
+  "properties": {
+    "schema_version": { "const": "advisory-evidence-analysis@1.0.0" },
+    "summary": { "type": "string", "minLength": 1, "maxLength": 2000 },
+    "hypotheses": {
+      "type": "array", "maxItems": 10,
+      "items": { "type": "string", "minLength": 1, "maxLength": 1000 }
+    },
+    "limitations": { "type": "array", "minItems": 1, "maxItems": 10,
+      "items": { "type": "string", "minLength": 1, "maxLength": 1000 }
+    },
+    "advisory_label": { "const": "advisory_non_authoritative" }
+  }
+}

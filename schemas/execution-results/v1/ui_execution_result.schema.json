@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-testpilot.local/schemas/execution-results/v1/ui_execution_result.schema.json",
+  "title": "AI TestPilot deterministic UI execution result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "executor_version", "case_id", "case_version", "status",
+    "failure_type", "expected_route", "actual_route", "duration_ms", "assertions",
+    "network_observations", "requirement_ids", "evidence_id", "evidence_hash"
+  ],
+  "properties": {
+    "schema_version": { "const": "ui-execution-result@1.0.0" },
+    "executor_version": { "const": "ui-executor@1.0.0" },
+    "case_id": { "type": "string", "pattern": "^TC-UI-[A-Z0-9-]+$" },
+    "case_version": { "type": "integer", "minimum": 1 },
+    "status": { "enum": ["PASS", "FAIL", "BLOCKED", "ERROR", "SKIPPED"] },
+    "failure_type": { "type": ["string", "null"], "maxLength": 80 },
+    "expected_route": { "type": "string", "pattern": "^/" },
+    "actual_route": { "type": ["string", "null"] },
+    "duration_ms": { "type": "integer", "minimum": 0 },
+    "assertions": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["assertion", "passed", "expected", "actual"],
+        "properties": {
+          "assertion": { "type": "string", "minLength": 1 },
+          "passed": { "type": "boolean" }, "expected": {}, "actual": {}
+        }
+      }
+    },
+    "network_observations": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["method", "path", "status"],
+        "properties": {
+          "method": { "type": "string" }, "path": { "type": "string" },
+          "status": { "type": "integer", "minimum": 100, "maximum": 599 }
+        }
+      }
+    },
+    "requirement_ids": {
+      "type": "array", "minItems": 1, "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^REQ-[A-Z0-9-]+$" }
+    },
+    "evidence_id": { "type": "string", "pattern": "^EVD-[A-F0-9]{32}$" },
+    "evidence_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  }
+}

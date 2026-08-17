@@ -19,6 +19,7 @@ from plugin.backend.app.prompts import PROMPT_VERSION, SCHEMA_VERSION, PromptReg
 from plugin.backend.app.providers import DeepSeekProvider, LLMProvider, MockLLMProvider
 from plugin.backend.app.test_generation import TestGenerationError, TestGenerationService
 from plugin.backend.app.test_review import TestReviewError, TestReviewService
+from plugin.backend.app.ui_execution import UiExecutionError, UiExecutionService
 
 api = Blueprint("plugin_api", __name__, url_prefix="/api/v1")
 
@@ -92,6 +93,10 @@ def _test_review_service() -> TestReviewService:
 
 def _api_execution_service() -> ApiExecutionService:
     return ApiExecutionService(_database())
+
+
+def _ui_execution_service() -> UiExecutionService:
+    return UiExecutionService(_database())
 
 
 @api.get("/health")
@@ -432,6 +437,43 @@ def phase7_api_test_evidence(result_id: str) -> tuple[Any, int]:
         result = _api_execution_service().evidence(result_id)
     except ApiExecutionError as error:
         raise ApiError("API_TEST_EVIDENCE_UNAVAILABLE", str(error), 404) from error
+    return jsonify({"data": result, "meta": {"request_id": request_id()}}), 200
+
+
+@api.post("/frozen-baselines/<baseline_id>/ui-executions")
+def phase7_execute_ui_baseline(baseline_id: str) -> tuple[Any, int]:
+    payload = _json_object()
+    environment_id = str(payload.get("environment_id", "")).strip()
+    if not environment_id:
+        raise ApiError("VALIDATION_ERROR", "environment_id is required.", 422)
+    try:
+        result = _ui_execution_service().execute(
+            baseline_id,
+            environment_id=environment_id,
+            base_url=current_app.config["SUT_UI_BASE_URL"],
+            browser_channel=current_app.config["PLAYWRIGHT_BROWSER_CHANNEL"],
+        )
+    except UiExecutionError as error:
+        status = 404 if str(error) == "BASELINE_NOT_FOUND" else 409
+        raise ApiError("UI_EXECUTION_ERROR", str(error), status) from error
+    return jsonify({"data": result, "meta": {"request_id": request_id()}}), 201
+
+
+@api.get("/ui-test-runs/<run_id>")
+def phase7_ui_test_run(run_id: str) -> tuple[Any, int]:
+    try:
+        result = _ui_execution_service().run(run_id)
+    except UiExecutionError as error:
+        raise ApiError("UI_TEST_RUN_UNAVAILABLE", str(error), 404) from error
+    return jsonify({"data": result, "meta": {"request_id": request_id()}}), 200
+
+
+@api.get("/ui-test-results/<result_id>/evidence")
+def phase7_ui_test_evidence(result_id: str) -> tuple[Any, int]:
+    try:
+        result = _ui_execution_service().evidence(result_id)
+    except UiExecutionError as error:
+        raise ApiError("UI_TEST_EVIDENCE_UNAVAILABLE", str(error), 404) from error
     return jsonify({"data": result, "meta": {"request_id": request_id()}}), 200
 
 

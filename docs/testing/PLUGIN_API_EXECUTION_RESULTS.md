@@ -43,5 +43,5 @@ deterministic rule. No historical execution record was edited or deleted.
 
 ## Boundary
 
-Phase 7B Playwright execution, Phase 8 evidence consolidation, bug generation, and report generation
-have not started.
+Phase 7B Playwright execution is accepted separately in `PLUGIN_UI_EXECUTION_RESULTS.md`. Phase 8
+evidence consolidation, bug generation, and report generation have not started.

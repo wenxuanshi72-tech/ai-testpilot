@@ -49,5 +49,7 @@ class PluginConfig:
                 os.getenv("TEST_GENERATION_MAX_TOTAL_PROVIDER_CALLS", "40")
             ),
             "TEST_GENERATION_MAX_COST_USD": os.getenv("TEST_GENERATION_MAX_COST_USD", "0.25"),
+            "SUT_UI_BASE_URL": os.getenv("SUT_UI_BASE_URL", "http://127.0.0.1:5173"),
+            "PLAYWRIGHT_BROWSER_CHANNEL": os.getenv("PLAYWRIGHT_BROWSER_CHANNEL", "msedge"),
             "TESTING": False,
         }

@@ -105,8 +105,8 @@ foreign-key violations after the single transactional freeze.
 - Approved automated versions selected for MVP: 10
 - Frozen baselines: 1
 - Immutable execution snapshots: 10
-- Test execution: not implemented or performed
-- API/UI verdicts: 0
+- Test execution: Phase 7A API execution completed; Phase 7B UI execution not started
+- API verdicts: 7 in accepted run (`5 PASS`, `2 FAIL`); UI verdicts: 0
 - Evidence, bugs, and reports: 0
 - Seeded defect: unchanged
-- Phase 7: not started
+- Phase 7A: accepted; Phase 7B: not started

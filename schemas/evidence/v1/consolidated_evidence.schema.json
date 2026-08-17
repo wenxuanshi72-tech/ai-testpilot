@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-testpilot.local/schemas/evidence/v1/consolidated_evidence.schema.json",
+  "title": "Consolidated evidence metadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "source_executor", "source_result_id", "source_evidence_id",
+    "case_id", "evidence_kind", "relative_path", "content_hash", "content_size",
+    "mime_type", "redaction_status", "integrity_status", "retention_class", "expires_at"
+  ],
+  "properties": {
+    "schema_version": { "const": "consolidated-evidence@1.0.0" },
+    "source_executor": { "enum": ["api", "ui"] },
+    "source_result_id": { "type": "string", "minLength": 1 },
+    "source_evidence_id": { "type": "string", "pattern": "^EVD-[A-F0-9]{32}$" },
+    "case_id": { "type": "string", "pattern": "^TC-(API|UI)-[A-Z0-9-]+$" },
+    "evidence_kind": { "enum": ["api_exchange", "screenshot", "trace"] },
+    "relative_path": { "type": ["string", "null"] },
+    "content_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "content_size": { "type": "integer", "minimum": 1 },
+    "mime_type": { "enum": ["application/json", "image/png", "application/zip"] },
+    "redaction_status": { "const": "verified" },
+    "integrity_status": { "const": "verified" },
+    "retention_class": { "enum": ["canonical", "screenshot", "trace"] },
+    "expires_at": { "type": "string", "format": "date-time" }
+  }
+}

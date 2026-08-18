@@ -11,6 +11,7 @@ from typing import Any
 from plugin.backend.app.providers import ProviderMetadata
 from plugin.backend.app.test_generation_prompts import TEST_GENERATION_PROMPT_VERSION
 from plugin.backend.app.test_generation_schemas import TEST_CASE_SCHEMA_VERSION, TestCaseSchemas
+from plugin.backend.app.test_generation_trace import is_seeded_username_requirement_id
 
 TEST_INTENT_COMPILER_VERSION = "deterministic-candidate-compiler@2.32.0"
 TEST_INTENT_COMPATIBILITY_VERSION = "test-intent-compatibility@1.29.0"
@@ -1058,8 +1059,9 @@ class DeterministicCandidateCompiler:
         if not (
             slot["case_id"] == "TC-API-AUTH-REG-005"
             and slot["case_type"] == "api"
-            and slot["primary_requirement_id"] == "REQ-BAT-002-6"
-            and slot["requirement_ids"] == ["REQ-BAT-002-6"]
+            and is_seeded_username_requirement_id(str(slot["primary_requirement_id"]))
+            and len(slot["requirement_ids"]) == 1
+            and is_seeded_username_requirement_id(str(slot["requirement_ids"][0]))
         ):
             return
         candidate["test_data"] = [

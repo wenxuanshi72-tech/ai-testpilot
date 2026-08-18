@@ -26,6 +26,8 @@ from plugin.backend.app.test_generation_budget import (
     calculate_cost,
     estimate_serialized_value,
 )
+from plugin.backend.app.test_generation_plan_validation import validate_generation_plan
+from plugin.backend.app.test_generation_planning import capacity_report_for_plan
 from plugin.backend.app.test_generation_prompts import TestGenerationPromptRegistry
 from plugin.backend.real_test_generation_acceptance import (
     AcceptanceLimits,
@@ -288,13 +290,24 @@ def execute_ai() -> dict[str, Any]:
             limits=generation_limits,
             resume_run_id=None,
         )
-        if (
-            len(generation_plan["requirements"]) != 19
-            or int(generation_plan["generation_slot_count"]) != 46
-            or len(generation_plan["batches"]) != 17
-            or generation_report["planned_call_count"] != 17
-        ):
-            raise PreflightError("PHASE13_GENERATION_PLAN_MISMATCH")
+        generation_snapshots = generation_service._load_requirement_snapshots(  # noqa: SLF001
+            str(project["project_id"])
+        )
+        generation_validation = validate_generation_plan(
+            generation_plan,
+            generation_snapshots,
+            capacity_report_for_plan(
+                generation_plan, generation_snapshots, generation_service.prompts
+            ),
+            expected_requirement_count=19,
+            maximum_structure_corrections=int(generation_report["correction_call_slots"]),
+            maximum_content_calls=(
+                len(generation_plan["batches"]) + int(generation_report["correction_call_slots"])
+            ),
+            maximum_provider_attempts=GENERATION_MAX_ATTEMPTS,
+            worst_case_cost_microusd=int(generation_report["worst_cost_microusd"]),
+            budget_microusd=GENERATION_BUDGET_MICROUSD,
+        )
         generation_prompts = TestGenerationPromptRegistry()
         generation_provider: LLMProvider = BudgetGuardProvider(
             provider,
@@ -312,7 +325,9 @@ def execute_ai() -> dict[str, Any]:
         )
         generation_calls = int(generation_provider.call_count)  # type: ignore[attr-defined]
         generation_cost = int(generation_provider.actual_cost_microusd)  # type: ignore[attr-defined]
-        if generation.status != "validated_pending_review" or generation.candidate_count != 46:
+        if generation.status != "validated_pending_review" or generation.candidate_count != int(
+            generation_plan["generation_slot_count"]
+        ):
             raise PreflightError(
                 f"PHASE13_GENERATION_FAILED:{generation.run_id}:{generation.status}:"
                 f"{generation.candidate_count}"
@@ -331,6 +346,7 @@ def execute_ai() -> dict[str, Any]:
             "generation_calls": generation_calls,
             "generation_cost_microusd": generation_cost,
             "candidates": generation.candidate_count,
+            "generation_plan_validation": generation_validation.as_dict(),
             "combined_calls": analysis_provider.call_count + generation_calls,
             "combined_cost_microusd": analysis_provider.actual_cost_microusd + generation_cost,
             "network": network,
@@ -365,7 +381,7 @@ def _reference_generation_plan() -> dict[str, Any]:
     plan = json.loads(str(row["plan_json"]))
     batches = list(plan.get("batches", []))
     return {
-        "reference_only": True,
+        "historical_reference_only": True,
         "requirements": int(requirements),
         "slots": int(plan.get("generation_slot_count", 0)),
         "batches": len(batches),
@@ -437,7 +453,8 @@ def dry_run(*, require_clean: bool = True) -> dict[str, Any]:
         },
         "generation_plan_reference": generation,
         "generation_limits": {
-            "initial_calls": generation["batches"],
+            "initial_calls": "derived_from_validated_plan",
+            "historical_reference_initial_calls": generation["batches"],
             "structure_corrections": 8,
             "provider_attempts": 40,
             "maximum_cost_usd": "0.250000",

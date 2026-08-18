@@ -23,8 +23,9 @@ fabricating either verdict.
 - Mock fallback: prohibited
 - Existing Provider responses: not reused
 - PRD analysis: 1 outline plus 2 requirement batches; maximum 9 attempts; US$0.026400 cap
-- Test generation: 17 initial batches; up to 8 structural corrections; maximum 40 Provider
-  attempts; US$0.250000 cap
+- Test generation: initial batches are derived from the current Requirements, applicable case
+  types, and token-capacity plan; up to 8 structural corrections; maximum 40 Provider attempts;
+  US$0.250000 cap. The earlier 46-slot/17-batch result is historical evidence, not a fixed contract.
 - Combined hard limits proposed for explicit approval: 49 Provider attempts and US$0.276400
 - A network attempt without usage is audited but does not permit exceeding the request cap.
 - Any cost uncertainty, model mismatch, truncation, invalid aggregate, or exhausted correction
@@ -58,9 +59,12 @@ may be stopped. Ports and temporary processes must be clean after the run.
    content hash.
 3. **Real analysis:** attributable provider/model/prompt/schema/calls; complete JSON; all batches
    validate; 19 formal requirements promote atomically.
-4. **Real generation:** 46 slots in 17 batches (API 7, UI 6, Manual 4); complete validation,
-   coverage, trace, cost, and audit; no partial candidate promotion.
-5. **Human review pause:** export all 46 candidates and findings. A real person classifies every
+4. **Real generation:** derive slots and batches from the current 19 formal Requirements. Validate
+   complete Requirement/type coverage, unique slots, exact batch coverage, token capacity,
+   deterministic seeded-defect API/UI guards, Schema, trace, executability, cost, and audit. The
+   second real analysis derives 44 slots in 18 batches: 19 API, 15 UI, and 10 Manual slots grouped
+   into 8 API, 6 UI, and 4 Manual batches.
+5. **Human review pause:** export every generated candidate and finding. A real person classifies every
    candidate and explicitly confirms revisions. No script invents the reviewer decision.
 6. **Freeze:** only approved, automated, executable versions enter the immutable MVP baseline;
    required seeded API/UI cases are present.

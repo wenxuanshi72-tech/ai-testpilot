@@ -24,7 +24,9 @@ evidence and artifact hashes, database integrity, recovery decisions, and cleanu
 The orchestrator must pause twice even when earlier steps pass:
 
 1. before the first paid Provider request unless exact call and cost limits were explicitly approved;
-2. after candidate export until a named human confirms the 46 review classifications and revisions.
+2. after candidate export until a named human confirms every dynamically generated candidate's
+   review classification and any required revisions. The historical count of 46 is not a fixed
+   Phase 13 contract.
 
 It may then freeze, execute the pre-fix worktree, consolidate evidence, generate the local Bug/report,
 switch to the accepted fixed SUT, run regression, close the Bug, and visually verify the Plugin UI.

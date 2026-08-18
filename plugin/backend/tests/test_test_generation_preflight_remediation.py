@@ -108,14 +108,14 @@ def test_seeded_requirement_resolution_rejects_zero_or_multiple_matches() -> Non
         resolve_seeded_username_requirement(
             {"REQ-OTHER": _snapshot("REQ-OTHER", "Username is optional.")}
         )
-    with pytest.raises(SeededRequirementResolutionError, match="SEEDED_REQUIREMENT_NOT_UNIQUE"):
+    with pytest.raises(SeededRequirementResolutionError, match="REQUIREMENT_IDENTITY_COLLISION"):
         resolve_seeded_username_requirement(
             {
-                "REQ-A": _snapshot(
-                    "REQ-A", "Registration username must have at least six characters."
+                "REQ-BAT-002-6": _snapshot(
+                    "REQ-BAT-002-6", "Registration username must have at least six characters."
                 ),
-                "REQ-B": _snapshot(
-                    "REQ-B", "Registration username must have a minimum of 6 characters."
+                "REQ-BAT-002-006": _snapshot(
+                    "REQ-BAT-002-006", "Registration username must have a minimum of 6 characters."
                 ),
             }
         )

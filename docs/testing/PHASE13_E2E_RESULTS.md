@@ -1,5 +1,25 @@
 # Phase 13 End-to-End Results
 
+## Dynamic generation-plan offline remediation
+
+The second isolated Analysis Run `ANR-8D946E45913A418F899774282E8121C2` and its 19 formal
+Requirements remain immutable. A read-only replay derives 44 unique slots in 18 capacity-valid
+batches: 19 API, 15 UI, and 10 Manual slots, grouped as 8 API, 6 UI, and 4 Manual batches.
+
+The historical 46-slot/17-batch plan is retained as reference evidence only. Phase 13 now validates
+complete Requirement/type coverage, unique slots, exact batch coverage without omission, token and
+authorization bounds, and deterministic seeded-defect API/UI guards. Numeric Requirement-ID
+segments are compared after removing leading zeroes, so `REQ-BAT-002-006` has the same comparison
+identity as `REQ-BAT-002-6`; storage and traceability retain the original ID. Any identity collision
+is rejected, and the formal username-minimum source constraint must also match.
+
+The replay performed zero Provider calls and created zero Analysis Runs, Test Generation Runs, or
+Candidates. The second database SHA-256 remained
+`ed06689a56ab227f92dabe2a34869e09be4f0c447d57aa746ce46a4831d7fb2c`. A future recovery uses a
+copy of this database, names the second Session as its manifest parent, and creates a new Test
+Generation Run whose source analysis remains `ANR-8D946E45913A418F899774282E8121C2`; it never
+rewrites the failed source Session.
+
 Status: FAIL — stopped at the real PRD outline Schema gate
 
 The authorized isolated run started on 2026-08-18 and stopped at its first mandatory validation

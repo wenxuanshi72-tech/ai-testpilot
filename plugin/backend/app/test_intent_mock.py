@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from plugin.backend.app.test_generation_trace import is_seeded_username_requirement_id
+
 
 def build_mock_intent_batch(
     case_type: str,
@@ -18,7 +20,7 @@ def build_mock_intent_batch(
 def _intent(slot: dict[str, Any], snapshot: dict[str, Any]) -> dict[str, Any]:
     case_type = str(slot["case_type"])
     requirement = snapshot["requirement"]
-    seeded = slot["primary_requirement_id"] == "REQ-BAT-002-6"
+    seeded = is_seeded_username_requirement_id(str(slot["primary_requirement_id"]))
     expected = [str(requirement["description"])]
     data = []
     if seeded:

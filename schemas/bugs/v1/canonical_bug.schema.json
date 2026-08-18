@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-testpilot.local/schemas/bugs/v1/canonical_bug.schema.json",
+  "title": "Canonical Local Bug",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "bug_id", "bug_version", "title", "status", "severity",
+    "priority", "defect_type", "project_id", "requirement_ids", "environment",
+    "preconditions", "reproduction_steps", "expected_result", "actual_result",
+    "failure_classification", "sources", "advisory_ai", "created_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "canonical-bug@1.0.0"},
+    "bug_id": {"type": "string", "pattern": "^BUG-[A-Z0-9-]+$"},
+    "bug_version": {"type": "integer", "minimum": 1},
+    "title": {"type": "string", "minLength": 1},
+    "status": {"enum": ["open", "resolved", "closed"]},
+    "severity": {"enum": ["critical", "high", "medium", "low"]},
+    "priority": {"enum": ["P0", "P1", "P2", "P3"]},
+    "defect_type": {"const": "business_rule_validation"},
+    "project_id": {"type": "string", "minLength": 1},
+    "requirement_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+    "environment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["environment_id", "frozen_baseline_id", "api_run_id", "ui_run_id"],
+      "properties": {
+        "environment_id": {"type": "string"}, "frozen_baseline_id": {"type": "string"},
+        "api_run_id": {"type": "string"}, "ui_run_id": {"type": "string"}
+      }
+    },
+    "preconditions": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+    "reproduction_steps": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+    "expected_result": {"type": "string", "minLength": 1},
+    "actual_result": {"type": "string", "minLength": 1},
+    "failure_classification": {"const": "seeded_product_bug"},
+    "sources": {
+      "type": "array", "minItems": 2,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["executor", "case_id", "case_version", "approved_version_id", "result_id", "classification_id", "evidence"],
+        "properties": {
+          "executor": {"enum": ["api", "ui"]}, "case_id": {"type": "string"},
+          "case_version": {"type": "integer", "minimum": 1}, "approved_version_id": {"type": "string"},
+          "result_id": {"type": "string"}, "classification_id": {"type": "string"},
+          "evidence": {"type": "array", "minItems": 1, "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["evidence_id", "kind", "content_hash", "relative_path"],
+            "properties": {"evidence_id": {"type": "string"}, "kind": {"type": "string"},
+              "content_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+              "relative_path": {"type": ["string", "null"]}}
+          }}
+        }
+      }
+    },
+    "advisory_ai": {"type": "array", "items": {"type": "object"}},
+    "created_at": {"type": "string", "minLength": 1}
+  }
+}

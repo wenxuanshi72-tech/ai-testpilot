@@ -34,12 +34,15 @@ def test_registration_persists_hash_and_opaque_session(app: Flask, client: Flask
         assert len(session.token_hash) == 64
 
 
-def test_seeded_defect_allows_five_character_username(client: FlaskClient) -> None:
-    """Internal sentinel, not formal REQ-AUTH-USERNAME-001 acceptance."""
+def test_registration_rejects_five_character_username(app: Flask, client: FlaskClient) -> None:
     response = client.post("/api/auth/register", json=registration_payload("z1234"))
 
-    assert response.status_code == 201
-    assert response_json(response)["data"]["username"] == "z1234"
+    assert response.status_code == 400
+    assert response_json(response)["error"]["details"] == [
+        {"field": "username", "code": "too_short"}
+    ]
+    with app.app_context():
+        assert db.session.scalar(db.select(User).where(User.username == "z1234")) is None
 
 
 def test_duplicate_username_is_case_insensitive(client: FlaskClient) -> None:

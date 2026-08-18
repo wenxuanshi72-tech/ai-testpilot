@@ -35,8 +35,16 @@ describe("authentication forms", () => {
     vi.mocked(authApi.getCurrentUser).mockResolvedValue(null);
   });
 
-  it("BUG-AUTH-001 allows a five-character username to reach the registration API", async () => {
-    vi.mocked(authApi.register).mockResolvedValue(user);
+  it("shows the API minimum-length error for a five-character username", async () => {
+    vi.mocked(authApi.register).mockRejectedValue(
+      new authApi.AuthApiError(
+        "VALIDATION_ERROR",
+        "Check the highlighted fields and try again.",
+        400,
+        "REQ-minimum",
+        { username: "Use at least 6 characters." },
+      ),
+    );
     renderApp("/register");
     await screen.findByRole("heading", { name: "Start a secure session" });
     enterRegistration(" z1234 ");
@@ -48,7 +56,8 @@ describe("authentication forms", () => {
         password_confirmation: "Test1234",
       }),
     );
-    expect(await screen.findByText("Account created successfully.")).toBeVisible();
+    expect(await screen.findByText("Use at least 6 characters.")).toBeVisible();
+    expect(screen.queryByText("Account created successfully.")).not.toBeInTheDocument();
   });
 
   it("maps a duplicate username and request ID to safe feedback", async () => {

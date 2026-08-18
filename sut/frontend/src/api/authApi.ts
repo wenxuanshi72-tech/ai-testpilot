@@ -56,6 +56,7 @@ export const apiClient = axios.create({
 const fieldMessages: Record<string, string> = {
   required_string: "This field is required.",
   invalid_format: "Use letters, numbers, or underscores only.",
+  too_short: "Use at least 6 characters.",
   too_long: "Use no more than 32 characters.",
   password_policy: "Use 8-128 characters with uppercase, lowercase, and a number.",
   mismatch: "The passwords do not match.",

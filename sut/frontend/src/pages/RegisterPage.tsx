@@ -80,7 +80,7 @@ export function RegisterPage() {
         <Form.Item
           name="username"
           label="Username"
-          extra="Letters, numbers, and underscores; maximum 32 characters."
+          extra="6-32 characters using letters, numbers, or underscores."
           rules={[
             { required: true, whitespace: true, message: "Choose a username." },
             { max: 32, message: "Use no more than 32 characters." },

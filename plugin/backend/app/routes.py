@@ -19,6 +19,7 @@ from plugin.backend.app.evidence import EvidenceError, EvidenceService
 from plugin.backend.app.ids import new_id
 from plugin.backend.app.prompts import PROMPT_VERSION, SCHEMA_VERSION, PromptRegistry
 from plugin.backend.app.providers import DeepSeekProvider, LLMProvider, MockLLMProvider
+from plugin.backend.app.reporting import TestReportError, TestReportService
 from plugin.backend.app.test_generation import TestGenerationError, TestGenerationService
 from plugin.backend.app.test_review import TestReviewError, TestReviewService
 from plugin.backend.app.ui_execution import UiExecutionError, UiExecutionService
@@ -107,6 +108,10 @@ def _evidence_service() -> EvidenceService:
 
 def _bug_artifact_service() -> BugArtifactService:
     return BugArtifactService(_database())
+
+
+def _test_report_service() -> TestReportService:
+    return TestReportService(_database())
 
 
 @api.get("/health")
@@ -535,6 +540,28 @@ def phase9_bug(record_id: str) -> tuple[Any, int]:
         result = _bug_artifact_service().get(record_id)
     except BugArtifactError as error:
         raise ApiError("BUG_ARTIFACT_UNAVAILABLE", str(error), 404) from error
+    return jsonify({"data": result, "meta": {"request_id": request_id()}}), 200
+
+
+@api.post("/evidence-consolidations/<run_id>/reports")
+def phase10_generate_report(run_id: str) -> tuple[Any, int]:
+    payload = _json_object()
+    bug_record_id = str(payload.get("canonical_bug_record_id", "")).strip()
+    if not bug_record_id:
+        raise ApiError("VALIDATION_ERROR", "canonical_bug_record_id is required.", 422)
+    try:
+        result = _test_report_service().generate(run_id, bug_record_id)
+    except TestReportError as error:
+        raise ApiError("TEST_REPORT_ERROR", str(error), 409) from error
+    return jsonify({"data": result, "meta": {"request_id": request_id()}}), 201
+
+
+@api.get("/reports/<report_id>")
+def phase10_report(report_id: str) -> tuple[Any, int]:
+    try:
+        result = _test_report_service().get(report_id)
+    except TestReportError as error:
+        raise ApiError("TEST_REPORT_UNAVAILABLE", str(error), 404) from error
     return jsonify({"data": result, "meta": {"request_id": request_id()}}), 200
 
 

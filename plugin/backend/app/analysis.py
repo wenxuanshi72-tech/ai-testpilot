@@ -16,6 +16,11 @@ from plugin.backend.app.constraints import (
 )
 from plugin.backend.app.database import PluginDatabase
 from plugin.backend.app.ids import new_id
+from plugin.backend.app.outline_normalization import (
+    OutlineNormalizationError,
+    SectionIdNormalizationAudit,
+    normalize_outline_section_ids,
+)
 from plugin.backend.app.prompts import (
     PROMPT_VERSION,
     RECOVERY_PROMPT_VERSION,
@@ -343,7 +348,8 @@ class AnalysisService:
         outline_source_run = reuse_run_id or run_id
         valid_outline = self.database.fetch_one(
             "SELECT llm_call_id FROM llm_call_logs WHERE analysis_run_id=:run "
-            "AND call_type='outline' AND validation_status='valid' LIMIT 1",
+            "AND call_type IN ('outline','outline_correction') "
+            "AND validation_status='valid' ORDER BY retry_count DESC LIMIT 1",
             {"run": outline_source_run},
         )
         if reuse_run_id:
@@ -365,20 +371,90 @@ class AnalysisService:
                 self._log_error(run_id, None, "outline", provider, 0, error)
                 raise
             try:
-                outline = parse_json_object(outline_response)
-                self.schemas.validate("prd_outline.schema.json", outline)
-                self._log_response(run_id, None, "outline", provider, outline_response, 0, "valid")
-            except JsonSchemaError as error:
-                diagnostic = _schema_diagnostic(error)
-                self._log_response(
-                    run_id, None, "outline", provider, outline_response, 0, "invalid", diagnostic
-                )
-                raise AnalysisValidationError(diagnostic) from error
+                raw_outline = parse_json_object(outline_response)
             except AnalysisValidationError as error:
                 self._log_response(
                     run_id, None, "outline", provider, outline_response, 0, "invalid", str(error)
                 )
                 raise
+            try:
+                outline, normalization_audits = normalize_outline_section_ids(raw_outline)
+                self.schemas.validate("prd_outline.schema.json", outline)
+            except (JsonSchemaError, OutlineNormalizationError) as error:
+                diagnostic = (
+                    _schema_diagnostic(error) if isinstance(error, JsonSchemaError) else str(error)
+                )
+                self._log_response(
+                    run_id,
+                    None,
+                    "outline",
+                    provider,
+                    outline_response,
+                    0,
+                    "invalid",
+                    diagnostic,
+                    parsed=raw_outline,
+                )
+                if self.max_retries < 1:
+                    raise AnalysisValidationError(diagnostic) from error
+                self._assert_call_budget(run_id, min(self.call_max_output_tokens, 2048))
+                try:
+                    correction = getattr(provider, "correct_outline", None)
+                    if not callable(correction):
+                        raise AnalysisValidationError("OUTLINE_CORRECTION_UNAVAILABLE")
+                    correction_response = correction(normalized, raw_outline, diagnostic)
+                except ProviderCallError as provider_error:
+                    self._log_error(run_id, None, "outline_correction", provider, 1, provider_error)
+                    raise
+                try:
+                    corrected_raw = parse_json_object(correction_response)
+                    outline, normalization_audits = normalize_outline_section_ids(corrected_raw)
+                    self.schemas.validate("prd_outline.schema.json", outline)
+                except (
+                    AnalysisValidationError,
+                    JsonSchemaError,
+                    OutlineNormalizationError,
+                ) as repair:
+                    repair_diagnostic = (
+                        _schema_diagnostic(repair)
+                        if isinstance(repair, JsonSchemaError)
+                        else str(repair)
+                    )
+                    self._log_response(
+                        run_id,
+                        None,
+                        "outline_correction",
+                        provider,
+                        correction_response,
+                        1,
+                        "invalid",
+                        repair_diagnostic,
+                        parsed=corrected_raw if "corrected_raw" in locals() else None,
+                    )
+                    raise AnalysisValidationError(repair_diagnostic) from repair
+                call_id = self._log_response(
+                    run_id,
+                    None,
+                    "outline_correction",
+                    provider,
+                    correction_response,
+                    1,
+                    "valid",
+                    parsed=outline,
+                )
+                self._record_outline_normalizations(call_id, normalization_audits)
+            else:
+                call_id = self._log_response(
+                    run_id,
+                    None,
+                    "outline",
+                    provider,
+                    outline_response,
+                    0,
+                    "valid",
+                    parsed=outline,
+                )
+                self._record_outline_normalizations(call_id, normalization_audits)
         queue = plan_batches(normalized, self.batch_max_chars)
         next_index = len(queue) + 1
         validated: list[tuple[BatchSpec, dict[str, Any]]] = []
@@ -1027,6 +1103,25 @@ class AnalysisService:
                 "redacted_error": error.error_type,
             }
         )
+
+    def _record_outline_normalizations(
+        self, call_id: str, audits: list[SectionIdNormalizationAudit]
+    ) -> None:
+        for audit in audits:
+            self.database.execute(
+                "INSERT INTO analysis_outline_normalization_audits("
+                "analysis_outline_normalization_audit_id,llm_call_id,section_index,"
+                "original_section_id,normalized_section_id,reason) VALUES "
+                "(:id,:call,:index,:original,:normalized,:reason)",
+                {
+                    "id": new_id("ONA"),
+                    "call": call_id,
+                    "index": audit.section_index,
+                    "original": audit.original_section_id,
+                    "normalized": audit.normalized_section_id,
+                    "reason": audit.reason,
+                },
+            )
 
     def _assert_call_budget(self, run_id: str, requested_tokens: int) -> None:
         row = self.database.fetch_one(

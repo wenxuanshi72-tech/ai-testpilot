@@ -1,0 +1,12 @@
+{
+  "document_summary": "Authentication demo requirements covering registration, login, sessions, security, and acceptance criteria.",
+  "sections": [
+    { "section_id": "1", "title": "Product goal", "source_heading": "Product goal" },
+    { "section_id": "2", "title": "User journeys", "source_heading": "User journeys" },
+    { "section_id": "3", "title": "Functional requirements", "source_heading": "Functional requirements" },
+    { "section_id": "4", "title": "Security and privacy", "source_heading": "Security and privacy" },
+    { "section_id": "5", "title": "Protected seeded defect", "source_heading": "Protected seeded defect" },
+    { "section_id": "6", "title": "Acceptance criteria", "source_heading": "Acceptance criteria" }
+  ],
+  "outline_complete": true
+}

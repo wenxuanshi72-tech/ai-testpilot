@@ -4,11 +4,11 @@
 
 | Field                          | Value                       |
 | ------------------------------ | --------------------------- |
-| Prompt version                 | prd-analysis@2.0.0          |
+| Prompt version                 | prd-analysis@2.1.0          |
 | Recovery prompt version        | prd-analysis-recovery@2.0.0 |
 | Schema version                 | requirements@2.0.0          |
 | Directory                      | prompts/prd-analysis/v2     |
-| Status                         | active for Phase 5A         |
+| Status                         | active through Phase 13     |
 | Thinking mode                  | disabled                    |
 | Maximum requirements per batch | 12 by default, configurable |
 
@@ -18,6 +18,7 @@
 | ------------------------------- | --------------------------------------------------------------- |
 | outline_system.md               | Untrusted-data boundary and strict JSON outline contract        |
 | outline_user.md                 | Bounded PRD outline request                                     |
+| outline_repair_system.md        | One bounded correction for ambiguous outline contract failures |
 | requirements_system.md          | Requirement fields, JSON example, limits, and forbidden outputs |
 | requirements_user.md            | Batch ID, allowed sections, and source data envelope            |
 | repair_system.md                | Limited small-envelope repair policy; no semantic invention     |

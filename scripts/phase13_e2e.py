@@ -100,6 +100,16 @@ class AnalysisBudgetProvider:
             lambda: self.provider.analyze_outline(prd_text),
         )
 
+    def correct_outline(
+        self, prd_text: str, invalid_outline: dict[str, object], validation_error: str
+    ) -> ProviderResponse:
+        maximum = min(self.provider.max_tokens, 2048)
+        return self._call(
+            self.prompts.outline_correction_messages(prd_text, invalid_outline, validation_error),
+            maximum,
+            lambda: self.provider.correct_outline(prd_text, invalid_outline, validation_error),
+        )
+
     def extract_requirements_batch(
         self,
         *,

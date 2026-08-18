@@ -370,7 +370,7 @@ def test_migration_has_phase5b_and_phase6_tables(database: PluginDatabase) -> No
         "test_case_review_audit_events",
     } <= tables
     migration = database.fetch_one("SELECT COUNT(*) AS count FROM schema_migrations")
-    assert migration == {"count": 13}
+    assert migration == {"count": 14}
 
 
 def test_versioned_schemas_and_prompts_are_complete() -> None:

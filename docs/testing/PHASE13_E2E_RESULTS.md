@@ -28,3 +28,19 @@ ignored session directory for diagnosis.
 Phase 13 is not a PASS. Phase 14 has not started and remains blocked. Any correction or new paid
 attempt requires a separate instruction; this failed run and its audit evidence must remain
 unchanged.
+
+## Offline remediation
+
+The failure was replayed without a Provider call. The stored outline contained the unique IDs
+`1`, `2`, `3`, `4`, `5`, and `6`; the unchanged Schema requires
+`^SEC-[A-Za-z0-9_-]{1,64}$`. The deterministic normalizer maps this exact class of bare positive
+integers to `SEC-001` through `SEC-006`, rejects empty, ambiguous, duplicate, and colliding values,
+and validates the transformed object against the full `requirements@2.0.0` Schema. The original
+response remains the authoritative raw artifact while normalized values and immutable conversion
+audits provide provenance.
+
+Offline replay passed Schema validation and formed two requirement-batch plans with zero Provider
+calls, zero new runs, and zero formal requirements. The failed database SHA-256 remained
+`fda9f713d5a270a06155090fe5047086ca5d437a260f393d183bc48d2133d623`; its status, one-call
+history, US$0.000547 cost evidence, and zero requirements were unchanged. This remediation does not
+authorize another paid attempt.

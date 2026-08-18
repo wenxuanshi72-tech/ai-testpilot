@@ -117,6 +117,14 @@ class DeepSeekProvider:
     def analyze_outline(self, prd_text: str) -> ProviderResponse:
         return self._call(self.prompts.outline_messages(prd_text), min(self.max_tokens, 2048))
 
+    def correct_outline(
+        self, prd_text: str, invalid_outline: dict[str, object], validation_error: str
+    ) -> ProviderResponse:
+        messages = self.prompts.outline_correction_messages(
+            prd_text, invalid_outline, validation_error
+        )
+        return self._call(messages, min(self.max_tokens, 2048))
+
     def extract_requirements_batch(
         self,
         *,
@@ -254,6 +262,13 @@ class MockLLMProvider:
             "outline_complete": True,
         }
         return self._response(payload, 512)
+
+    def correct_outline(
+        self, prd_text: str, invalid_outline: dict[str, object], validation_error: str
+    ) -> ProviderResponse:
+        if self.responses:
+            return self._next()
+        return self.analyze_outline(prd_text)
 
     def extract_requirements_batch(
         self,

@@ -23,6 +23,7 @@ from plugin.backend.app.reporting import TestReportError, TestReportService
 from plugin.backend.app.test_generation import TestGenerationError, TestGenerationService
 from plugin.backend.app.test_review import TestReviewError, TestReviewService
 from plugin.backend.app.ui_execution import UiExecutionError, UiExecutionService
+from plugin.backend.app.workspace import WorkspaceService
 
 api = Blueprint("plugin_api", __name__, url_prefix="/api/v1")
 
@@ -126,6 +127,13 @@ def health() -> tuple[Any, int]:
             },
             "meta": {"request_id": request_id()},
         }
+    ), 200
+
+
+@api.get("/workspace")
+def phase12_workspace() -> tuple[Any, int]:
+    return jsonify(
+        {"data": WorkspaceService(_database()).snapshot(), "meta": {"request_id": request_id()}}
     ), 200
 
 

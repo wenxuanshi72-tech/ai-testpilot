@@ -23,17 +23,21 @@ plugin-backend = [
   "SQLAlchemy>=2.0,<3",
   "jsonschema>=4.23,<5",
   "pydantic>=2.11,<3",
+  "reportlab>=4.4,<5",
 ]
 test = [
   "httpx>=0.28,<1",
   "playwright>=1.50,<2",
   "pytest>=8.3,<9",
   "pytest-cov>=6,<8",
+  "pypdf>=5.9,<6",
+  "pypdfium2>=4.30,<5",
 ]
 quality = [
   "mypy>=1.15,<2",
   "ruff>=0.11,<1",
   "types-jsonschema>=4.23,<5",
+  "types-reportlab>=4.4,<5",
 ]
 
 [tool.setuptools]

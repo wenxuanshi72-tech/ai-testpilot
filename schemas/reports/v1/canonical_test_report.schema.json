@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-testpilot.local/schemas/reports/v1/canonical_test_report.schema.json",
+  "title": "Canonical Test Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "report_version", "title", "status", "project_id", "sources", "summary", "classifications", "results", "bugs", "evidence_count", "created_at"],
+  "properties": {
+    "schema_version": {"const": "canonical-test-report@1.0.0"},
+    "report_version": {"type": "integer", "minimum": 1},
+    "title": {"type": "string", "minLength": 1},
+    "status": {"const": "completed"},
+    "project_id": {"type": "string", "minLength": 1},
+    "sources": {
+      "type": "object", "additionalProperties": false,
+      "required": ["frozen_baseline_id", "api_run_id", "ui_run_id", "evidence_consolidation_run_id", "canonical_bug_record_id"],
+      "properties": {
+        "frozen_baseline_id": {"type": "string"}, "api_run_id": {"type": "string"},
+        "ui_run_id": {"type": "string"}, "evidence_consolidation_run_id": {"type": "string"},
+        "canonical_bug_record_id": {"type": "string"}
+      }
+    },
+    "summary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["total", "pass", "fail", "blocked", "error", "skipped", "api_total", "ui_total"],
+      "properties": {
+        "total": {"type": "integer", "minimum": 0}, "pass": {"type": "integer", "minimum": 0},
+        "fail": {"type": "integer", "minimum": 0}, "blocked": {"type": "integer", "minimum": 0},
+        "error": {"type": "integer", "minimum": 0}, "skipped": {"type": "integer", "minimum": 0},
+        "api_total": {"type": "integer", "minimum": 0}, "ui_total": {"type": "integer", "minimum": 0}
+      }
+    },
+    "classifications": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "results": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["executor", "case_id", "case_version", "result_id", "verdict", "classification", "expected", "actual", "evidence", "bug_id"],
+        "properties": {
+          "executor": {"enum": ["api", "ui"]}, "case_id": {"type": "string"},
+          "case_version": {"type": "integer", "minimum": 1}, "result_id": {"type": "string"},
+          "verdict": {"enum": ["PASS", "FAIL", "BLOCKED", "ERROR", "SKIPPED"]},
+          "classification": {"type": "string"}, "expected": {"type": ["integer", "string", "null"]},
+          "actual": {"type": ["integer", "string", "null"]}, "bug_id": {"type": ["string", "null"]},
+          "evidence": {"type": "array", "minItems": 1, "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["evidence_id", "kind", "relative_path", "content_hash"],
+            "properties": {"evidence_id": {"type": "string"}, "kind": {"type": "string"},
+              "relative_path": {"type": "string", "minLength": 1},
+              "content_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+          }}
+        }
+      }
+    },
+    "bugs": {"type": "array", "minItems": 1, "items": {
+      "type": "object", "additionalProperties": false,
+      "required": ["bug_id", "bug_version", "status", "record_id", "title"],
+      "properties": {"bug_id": {"type": "string"}, "bug_version": {"type": "integer"},
+        "status": {"type": "string"}, "record_id": {"type": "string"}, "title": {"type": "string"}}
+    }},
+    "evidence_count": {"type": "integer", "minimum": 1},
+    "created_at": {"type": "string", "minLength": 1}
+  }
+}

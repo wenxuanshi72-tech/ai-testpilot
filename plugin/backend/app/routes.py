@@ -12,6 +12,7 @@ from plugin.backend.app.analysis import (
     normalize_prd,
 )
 from plugin.backend.app.api_execution import ApiExecutionError, ApiExecutionService
+from plugin.backend.app.bug_artifacts import BugArtifactError, BugArtifactService
 from plugin.backend.app.database import PluginDatabase
 from plugin.backend.app.errors import ApiError, request_id
 from plugin.backend.app.evidence import EvidenceError, EvidenceService
@@ -102,6 +103,10 @@ def _ui_execution_service() -> UiExecutionService:
 
 def _evidence_service() -> EvidenceService:
     return EvidenceService(_database())
+
+
+def _bug_artifact_service() -> BugArtifactService:
+    return BugArtifactService(_database())
 
 
 @api.get("/health")
@@ -507,6 +512,29 @@ def phase8_evidence_consolidation(run_id: str) -> tuple[Any, int]:
         result = _evidence_service().get(run_id)
     except EvidenceError as error:
         raise ApiError("EVIDENCE_CONSOLIDATION_UNAVAILABLE", str(error), 404) from error
+    return jsonify({"data": result, "meta": {"request_id": request_id()}}), 200
+
+
+@api.post("/evidence-consolidations/<run_id>/bugs")
+def phase9_generate_bug(run_id: str) -> tuple[Any, int]:
+    payload = _json_object()
+    bug_id = str(payload.get("bug_id", "")).strip()
+    if not bug_id:
+        raise ApiError("VALIDATION_ERROR", "bug_id is required.", 422)
+    try:
+        result = _bug_artifact_service().generate(run_id, bug_id)
+    except BugArtifactError as error:
+        status = 404 if str(error) == "CONSOLIDATION_NOT_ELIGIBLE" else 409
+        raise ApiError("BUG_ARTIFACT_ERROR", str(error), status) from error
+    return jsonify({"data": result, "meta": {"request_id": request_id()}}), 201
+
+
+@api.get("/bugs/<record_id>")
+def phase9_bug(record_id: str) -> tuple[Any, int]:
+    try:
+        result = _bug_artifact_service().get(record_id)
+    except BugArtifactError as error:
+        raise ApiError("BUG_ARTIFACT_UNAVAILABLE", str(error), 404) from error
     return jsonify({"data": result, "meta": {"request_id": request_id()}}), 200
 
 

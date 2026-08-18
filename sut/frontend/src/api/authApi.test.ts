@@ -22,7 +22,10 @@ describe("auth API client", () => {
           error: {
             code: "VALIDATION_ERROR",
             message: "Internal detail that must not be shown.",
-            details: [{ field: "username", code: "invalid_format" }],
+            details: [
+              { field: "username", code: "invalid_format" },
+              { field: "shortUsername", code: "too_short" },
+            ],
           },
           meta: { request_id: "REQ-map" },
         },
@@ -32,6 +35,7 @@ describe("auth API client", () => {
     const normalized = toAuthApiError(error);
     expect(normalized.message).toBe("Check the highlighted fields and try again.");
     expect(normalized.fieldErrors.username).toBe("Use letters, numbers, or underscores only.");
+    expect(normalized.fieldErrors.shortUsername).toBe("Use at least 6 characters.");
     expect(normalized.requestId).toBe("REQ-map");
   });
 

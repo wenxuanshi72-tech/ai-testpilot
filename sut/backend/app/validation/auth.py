@@ -7,6 +7,7 @@ from typing import Any
 from sut.backend.app.errors import ApiError, ErrorDetail
 
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_]+$")
+USERNAME_MIN_LENGTH = 6
 USERNAME_MAX_LENGTH = 32
 PASSWORD_MIN_LENGTH = 8
 PASSWORD_MAX_LENGTH = 128
@@ -24,16 +25,17 @@ def _required_string(payload: dict[str, Any], field: str) -> str:
     return value
 
 
-def normalize_username(value: str) -> str:
+def normalize_username(value: str, *, enforce_minimum: bool = False) -> str:
     username = value.strip().lower()
     details: list[ErrorDetail] = []
     if not username:
         details.append(ErrorDetail("username", "required_string"))
+    elif enforce_minimum and len(username) < USERNAME_MIN_LENGTH:
+        details.append(ErrorDetail("username", "too_short"))
     elif len(username) > USERNAME_MAX_LENGTH:
         details.append(ErrorDetail("username", "too_long"))
     elif not USERNAME_PATTERN.fullmatch(username):
         details.append(ErrorDetail("username", "invalid_format"))
-    # Protected seeded defect: REQ-AUTH-USERNAME-001 minimum length is intentionally omitted.
     if details:
         raise ApiError(400, "VALIDATION_ERROR", "The request is invalid.", details)
     return username
@@ -63,7 +65,7 @@ class RegistrationInput:
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> RegistrationInput:
-        username = normalize_username(_required_string(payload, "username"))
+        username = normalize_username(_required_string(payload, "username"), enforce_minimum=True)
         password = validate_password(_required_string(payload, "password"))
         confirmation = _required_string(payload, "password_confirmation")
         if confirmation != password:

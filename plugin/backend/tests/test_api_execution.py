@@ -55,7 +55,7 @@ def _frozen_api_baseline(database: PluginDatabase) -> str:
     ).baseline_id
 
 
-def test_api_executor_runs_frozen_api_subset_and_exposes_seeded_bug(
+def test_api_executor_runs_frozen_api_subset_after_seeded_bug_fix(
     formal_database: PluginDatabase,
 ) -> None:
     baseline_id = _frozen_api_baseline(formal_database)
@@ -69,22 +69,22 @@ def test_api_executor_runs_frozen_api_subset_and_exposes_seeded_bug(
     assert run["executor_version"] == API_EXECUTOR_VERSION
     assert len(run["results"]) == 9
     seeded = next(item for item in run["results"] if item["case_id"] == "TC-API-AUTH-REG-005")
-    assert seeded["status"] == "FAIL"
-    assert seeded["failure_type"] == "suspected_product_bug"
+    assert seeded["status"] == "PASS"
+    assert seeded["failure_type"] is None
     assert seeded["expected_status"] == 400
-    assert seeded["actual_status"] == 201
+    assert seeded["actual_status"] == 400
     assertions = seeded["result"]["assertions"]
     assert next(item for item in assertions if item["assertion"] == "status_equals") == {
         "assertion": "status_equals",
-        "passed": False,
+        "passed": True,
         "expected": 400,
-        "actual": 201,
+        "actual": 400,
     }
     assert (
         next(item for item in assertions if item["assertion"] == "rejected_user_not_created")[
             "passed"
         ]
-        is False
+        is True
     )
 
     evidence_rows = formal_database.fetch_all(

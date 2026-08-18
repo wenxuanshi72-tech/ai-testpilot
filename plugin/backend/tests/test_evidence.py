@@ -9,7 +9,12 @@ import pytest
 from flask.testing import FlaskClient
 from sqlalchemy.exc import IntegrityError
 
-from plugin.backend.app.api_execution import ApiExecutionService, _canonical
+from plugin.backend.app.api_execution import (
+    ApiExecutionService,
+    LocalFlaskSutRuntime,
+    RuntimeResponse,
+    _canonical,
+)
 from plugin.backend.app.database import PROJECT_ROOT, PluginDatabase
 from plugin.backend.app.evidence import (
     CLASSIFIER_VERSION,
@@ -29,7 +34,27 @@ def _source_runs(
 ) -> tuple[str, str, Path]:
     _seed_formal_requirements(database)
     baseline_id = _frozen_api_baseline(database)
-    api_run = ApiExecutionService(database).execute(baseline_id, environment_id="local-test")
+
+    class HistoricalDefectRuntime(LocalFlaskSutRuntime):
+        """Reproduce the immutable pre-fix API observation for Phase 8-10 tests."""
+
+        def request(
+            self, method: str, path: str, *, headers: dict[str, str], body: Any
+        ) -> RuntimeResponse:
+            historical_body = body
+            if (
+                self.case_id == "TC-API-AUTH-REG-005"
+                and method == "POST"
+                and path == "/api/auth/register"
+                and isinstance(body, dict)
+                and body.get("username") == "z1234"
+            ):
+                historical_body = {**body, "username": "z12345"}
+            return super().request(method, path, headers=headers, body=historical_body)
+
+    api_run = ApiExecutionService(database, HistoricalDefectRuntime).execute(
+        baseline_id, environment_id="local-test"
+    )
     evidence_root = PROJECT_ROOT / "artifacts" / "evidence" / new_id("PHASE8TEST")
     service = UiExecutionService(database, evidence_root=evidence_root)
     monkeypatch.setattr("plugin.backend.app.ui_execution.sync_playwright", _FakePlaywright)

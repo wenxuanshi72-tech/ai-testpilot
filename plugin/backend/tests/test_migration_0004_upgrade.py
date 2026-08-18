@@ -23,7 +23,7 @@ def test_existing_0003_database_upgrades_through_phase6(
             )
     database = PluginDatabase(f"sqlite:///{database_path.as_posix()}")
     database.migrate()
-    assert database.fetch_one("SELECT COUNT(*) AS count FROM schema_migrations") == {"count": 12}
+    assert database.fetch_one("SELECT COUNT(*) AS count FROM schema_migrations") == {"count": 13}
     assert database.fetch_one("PRAGMA integrity_check") == {"integrity_check": "ok"}
     assert database.fetch_all("PRAGMA foreign_key_check") == []
     tables = {
@@ -50,6 +50,7 @@ def test_existing_0003_database_upgrades_through_phase6(
         "bug_artifact_bundles",
         "bug_artifact_audit_events",
     } <= tables
+    assert {"defect_regression_runs", "bug_status_events"} <= tables
     assert {"api_test_runs", "api_test_results", "api_test_evidence"} <= tables
     assert {"ui_test_runs", "ui_test_results", "ui_test_evidence"} <= tables
     assert {

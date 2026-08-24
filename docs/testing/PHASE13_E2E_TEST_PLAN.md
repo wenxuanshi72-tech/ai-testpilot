@@ -1,88 +1,64 @@
-# Phase 13 End-to-End Test Plan
+# Phase 13 Portfolio MVP End-to-End Test Plan
 
-Status: paid-provider authorization pending
+Status: portfolio MVP scope accepted; no further paid generation required
 
-## Objective and fixed inputs
+## Objective
 
-Phase 13 repeats the accepted local lifecycle without adding business behavior. It uses
-`docs/prd/login_register_prd.md`, creates a new project named
-`Phase 13 E2E Authentication Loop <timestamp>`, and writes only to an ignored session directory
-under `tmp/phase13-e2e/`. Existing Phase 5-12 runs, evidence, Bugs, reports, regression records,
-`instance/plugin.db`, and runtime artifacts are read-only references and are never reused as this
-run's results.
+Phase 13 demonstrates the complete local portfolio story without claiming production-grade
+regeneration of every AI candidate. The accepted path is:
 
-The pre-fix SUT is started from an isolated worktree at Phase 10 merge point `bb24609`; the
-post-fix regression uses current accepted main. This produces a real HTTP 201 defect observation
-before the authorized fix and a real HTTP 400 result after it without reverting current sources or
-fabricating either verdict.
+```text
+real DeepSeek PRD analysis
+→ 19 structured Requirements
+→ reviewed historical candidate collection
+→ 10-case frozen MVP baseline
+→ real deterministic API and Playwright results
+→ persisted evidence and failure classification
+→ BUG-AUTH-001 and Markdown/HTML/PDF report
+→ authorized SUT fix
+→ same-case FAIL-to-PASS regression
+→ append-only Bug closure
+```
 
-## Provider plan requiring separate authorization
+The verifier is `scripts/verify_phase13_portfolio_mvp.py`. It opens databases read-only, recomputes
+canonical hashes and trace invariants, and performs no Provider call or business-data write.
 
-- Provider: DeepSeek Real; model: `deepseek-v4-pro`
-- Thinking: disabled; JSON response mode; no streaming
-- Mock fallback: prohibited
-- Existing Provider responses: not reused
-- PRD analysis: 1 outline plus 2 requirement batches; maximum 9 attempts; US$0.026400 cap
-- Test generation: initial batches are derived from the current Requirements, applicable case
-  types, and token-capacity plan; up to 8 structural corrections; maximum 40 Provider attempts;
-  US$0.250000 cap. The earlier 46-slot/17-batch result is historical evidence, not a fixed contract.
-- Combined hard limits proposed for explicit approval: 49 Provider attempts and US$0.276400
-- A network attempt without usage is audited but does not permit exceeding the request cap.
-- Any cost uncertainty, model mismatch, truncation, invalid aggregate, or exhausted correction
-  budget stops the workflow. Real failure never falls back to Mock.
+## Truthful scope boundary
 
-No API key is read until the paid authorization gate is approved. The key remains process-local and
-must not enter commands, logs, databases, artifacts, screenshots, reports, or Git.
+- The real Analysis Run `ANR-8D946E45913A418F899774282E8121C2` is accepted as the Phase 13
+  Provider evidence. It used DeepSeek Real with `deepseek-v4-pro`, completed three content calls,
+  and atomically stored 19 Requirements.
+- The 44-slot/18-batch candidate-regeneration experiment is retained as engineering evidence, not
+  an acceptance dependency. Its failed Sessions and costs remain immutable and visible.
+- Phase 13 does not claim that those 44 candidates were promoted, reviewed, or executed.
+- The execution half reuses the approved portfolio MVP baseline
+  `FBL-5BCEA5DA11144E9BB47C545AD73919DD`, which contains ten immutable snapshots produced by the
+  accepted Phase 5B/6 workflow.
+- Reuse is explicit. Existing real results are verified; they are not copied into fabricated new
+  Run IDs and are not presented as a new clean-room execution.
 
-## Isolation and local services
+## Mandatory verification gates
 
-The session directory contains `plugin.db`, `sut.db`, an Artifacts root, redacted logs, a manifest,
-and a database backup with SHA-256. The isolated paths are Git-ignored. Before execution the
-orchestrator verifies the backup can be opened, migrations apply, `integrity_check=ok`, and
-`foreign_key_check` returns no rows.
+1. The Analysis Run exists, is `succeeded`, identifies DeepSeek Real and `deepseek-v4-pro`, has
+   HTTP 200/`finish_reason=stop` call evidence, and owns exactly 19 Requirements.
+2. Both the analysis database and the accepted Plugin database pass SQLite `integrity_check` and
+   have zero foreign-key violations.
+3. The MVP baseline is frozen and contains exactly ten snapshots whose hashes recompute.
+4. The pre-fix canonical report links real API and UI runs containing failures.
+5. `BUG-AUTH-001` v1 links exactly `TC-API-AUTH-REG-005` and `TC-UI-AUTH-REG-005` and its canonical
+   hash recomputes.
+6. The canonical report hash recomputes from the same persisted record.
+7. Regression uses the same frozen baseline and records both seeded transitions as `FAIL→PASS`.
+8. The regression trace hash recomputes and the append-only Bug status event is `open→closed`.
+9. The verifier reports zero new Provider calls and zero new Runs.
+10. All historical Phase 13 generation failures remain documented; no result is relabelled PASS.
 
-| Service      | Address                 |
-| ------------ | ----------------------- |
-| SUT Flask    | `http://127.0.0.1:5001` |
-| SUT React    | `http://127.0.0.1:5173` |
-| Plugin Flask | `http://127.0.0.1:5002` |
-| Plugin React | `http://127.0.0.1:5174` |
+## Quality and safety
 
-All four health/port checks must pass before browser or API execution. Only recorded session PIDs
-may be stopped. Ports and temporary processes must be clean after the run.
+Run the focused verifier tests, complete Plugin/backend and repository gates, Ruff, mypy,
+front-end checks/builds as applicable, `git diff --check`, database checks, and a sensitive-data
+scan. `.env`, databases, logs, screenshots, traces, and generated reports remain ignored runtime
+data. No secret content is read or printed.
 
-## Ordered gates and success criteria
-
-1. **Environment:** correct branch/commit, clean tree, supported Python/Node/npm/Git/browser,
-   ignored secrets/runtime paths, four free ports, no external connector.
-2. **Project/PRD:** exactly one new E2E project and one normalized PRD version with the expected
-   content hash.
-3. **Real analysis:** attributable provider/model/prompt/schema/calls; complete JSON; all batches
-   validate; 19 formal requirements promote atomically.
-4. **Real generation:** derive slots and batches from the current 19 formal Requirements. Validate
-   complete Requirement/type coverage, unique slots, exact batch coverage, token capacity,
-   deterministic seeded-defect API/UI guards, Schema, trace, executability, cost, and audit. The
-   second real analysis derives 44 slots in 18 batches: 19 API, 15 UI, and 10 Manual slots grouped
-   into 8 API, 6 UI, and 4 Manual batches.
-5. **Human review pause:** export every generated candidate and finding. A real person classifies every
-   candidate and explicitly confirms revisions. No script invents the reviewer decision.
-6. **Freeze:** only approved, automated, executable versions enter the immutable MVP baseline;
-   required seeded API/UI cases are present.
-7. **Pre-fix execution:** deterministic API and Playwright runs use the same frozen versions;
-   `TC-API-AUTH-REG-005` and `TC-UI-AUTH-REG-005` genuinely fail for `BUG-AUTH-001`; adjacent
-   guards retain truthful results.
-8. **Evidence/Bug/report:** hashes and redaction pass; one canonical local Bug links both product
-   failures; Markdown/JSON Bug and Markdown/HTML/PDF report reconcile and render.
-9. **Authorized fix boundary:** switch only the isolated SUT runtime from pre-fix `bb24609` to the
-   accepted fixed current commit. Test expectations and snapshots remain unchanged.
-10. **Regression/closure:** both seeded cases change `FAIL -> PASS`; required authentication guards
-    pass; old evidence remains immutable; append-only Bug closure and trace hash are created.
-11. **Plugin UI:** all nine Phase 12 routes load the isolated E2E database and expose the new IDs,
-    metrics, artifacts, and regression chain without secret or absolute-path leakage.
-12. **Final integrity:** file/manifest hashes recompute, trace has no critical orphan, SQLite checks
-    pass, quality gates pass, and all four ports are released.
-
-Any failed mandatory gate stops later mutation. Partial AI batches cannot promote, incomplete human
-classification cannot freeze, missing evidence cannot create a Bug/report, and a failed regression
-cannot close the Bug. Phase 14 remains blocked until the final results document records a complete
-PASS.
+Phase 14 may begin only when the verifier and quality gates pass and the results document clearly
+states the reuse boundary above.

@@ -1,10 +1,24 @@
 # Local End-to-End Runbook
 
-Status: Phase 13 dry-run available; paid execution not yet authorized
+Status: Phase 13 portfolio MVP evidence replay available; no paid call required
 
-## Authorization-free preflight
+## Accepted portfolio verification
 
 From the repository root on `test/end-to-end-loop`:
+
+```powershell
+$env:PYTHONPATH='.'
+.\.venv\Scripts\python.exe scripts\verify_phase13_portfolio_mvp.py
+```
+
+The verifier opens the accepted Analysis and Plugin databases read-only. It recomputes the real
+Provider identity, 19-Requirement count, ten immutable snapshot hashes, canonical Bug/report
+hashes, seeded `FAIL→PASS` transitions, regression trace, Bug closure, SQLite integrity, and foreign
+keys. It creates no Provider call, Session, Run, Candidate, approval, baseline, result, or artifact.
+
+## Historical full-generation experiment
+
+The original diagnostic dry-run remains available:
 
 ```powershell
 $env:PYTHONPATH='.'
@@ -13,10 +27,12 @@ $env:PYTHONPATH='.'
 
 This command performs read-only checks and prints the PRD/provider/batch/cost/port plan. It does not
 load `.env`, create a database or project, create an AI run, start services, or call a Provider.
+`execute-ai` is not required by the accepted portfolio MVP path and still requires a new explicit
+paid authorization if it is ever used for further experimentation.
 
 ## Execution checkpoints
 
-After separate paid authorization, the future execute command must create a timestamped ignored
+After separate paid authorization, any future experimental execute command must create a timestamped ignored
 session directory and an append-only command journal. It must record tool versions, commit IDs,
 start/end timestamps, durations, Provider request counts/usage/cost, every domain ID, result totals,
 evidence and artifact hashes, database integrity, recovery decisions, and cleanup status.
@@ -25,10 +41,10 @@ The orchestrator must pause twice even when earlier steps pass:
 
 1. before the first paid Provider request unless exact call and cost limits were explicitly approved;
 2. after candidate export until a named human confirms every dynamically generated candidate's
-   review classification and any required revisions. The historical count of 46 is not a fixed
-   Phase 13 contract.
+   review classification and any required revisions. Neither 46 nor 44 is a fixed portfolio
+   acceptance count.
 
-It may then freeze, execute the pre-fix worktree, consolidate evidence, generate the local Bug/report,
+Such an experiment may then freeze, execute the pre-fix worktree, consolidate evidence, generate the local Bug/report,
 switch to the accepted fixed SUT, run regression, close the Bug, and visually verify the Plugin UI.
 It must never run arbitrary model-produced SQL, shell, code, or file paths.
 

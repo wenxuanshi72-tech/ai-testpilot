@@ -1,5 +1,52 @@
 # Phase 13 End-to-End Results
 
+## Portfolio MVP acceptance
+
+**Result: PASS for the explicitly reduced portfolio MVP scope.** This is an evidence replay over
+accepted real components, not a claim that the experimental 44-candidate collection regenerated.
+
+The read-only verifier `scripts/verify_phase13_portfolio_mvp.py` produced the following evidence:
+
+| Gate                      | Result                                                                                               |
+| ------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Real Provider analysis    | `ANR-8D946E45913A418F899774282E8121C2`; DeepSeek Real; `deepseek-v4-pro`; 3 successful content calls |
+| Structured Requirements   | 19                                                                                                   |
+| Frozen execution input    | `FBL-5BCEA5DA11144E9BB47C545AD73919DD`; 10 immutable snapshots                                       |
+| Pre-fix API Run           | `RUN-71ED569CD73643E5B19F48BCFCD0FBEF`                                                               |
+| Pre-fix UI Run            | `UIR-7169E1697F86400EBAE8AFBBBD5675B4`                                                               |
+| Canonical Bug             | `BUG-AUTH-001`; `BUGR-B4E714D0B26843EF912A65B224ACFC32`                                              |
+| Canonical report          | `RPT-BE5D133ABFB54EF2A4AFEFC82D86A189`                                                               |
+| Regression                | `RGR-5B1FD386A93B49658A7D3927B7F7C65A`                                                               |
+| Seeded API transition     | `TC-API-AUTH-REG-005`: `FAIL→PASS`                                                                   |
+| Seeded UI transition      | `TC-UI-AUTH-REG-005`: `FAIL→PASS`                                                                    |
+| Effective Bug status      | `closed`, through append-only `open→closed` event                                                    |
+| Hash verification         | snapshots, Bug, report, and regression trace PASS                                                    |
+| SQLite                    | both databases `integrity_check=ok`; foreign-key violations 0                                        |
+| New Provider calls / Runs | 0 / 0                                                                                                |
+
+The accepted portfolio claim is therefore limited and precise: a real Provider produced the
+structured Requirements, while the already reviewed and frozen ten-case MVP baseline supplied the
+real deterministic execution, evidence, Bug/report, authorized fix, and regression chain. The
+historical Sessions below remain FAIL and demonstrate bounded handling of unstable model output.
+They were not relabelled, deleted, or used as a source of newly promoted Candidates.
+
+### Final quality gates
+
+- Portfolio verifier tests: 2 passed.
+- Plugin backend: 319 passed, 1 deselected.
+- Ruff format/check: PASS for Plugin, SUT, and scripts.
+- mypy: 76 source files, PASS.
+- SUT frontend Vitest: 27 passed.
+- Plugin frontend Vitest: 12 passed.
+- SUT and Plugin ESLint: PASS.
+- SUT and Plugin TypeScript production builds: PASS. Both report advisory bundle-size warnings;
+  neither build failed.
+- Prettier: PASS for all Phase 13 files. The repository-wide check still identifies historical
+  formatting debt outside this change set; those files were intentionally not rewritten.
+- Sensitive/runtime files: `.env`, databases, `tmp/`, logs, screenshots, traces, and generated
+  report bundles are absent from the change set.
+- Ports 5001, 5173, 5002, and 5174: no listener remained after validation.
+
 ## Envelope recovery `E2E-20260824T152510Z`
 
 Recovery Run `TGR-BCDAE28E315D46058E5ED9C8D830D1C6` revalidated nine checkpoints and

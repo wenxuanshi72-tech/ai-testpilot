@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-testpilot.local/schemas/run-bundles/v1/run_manifest.schema.json",
+  "title": "AI TestPilot Run Artifact Bundle manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "project_id",
+    "environment_id",
+    "source_commit",
+    "frozen_baseline_id",
+    "executor",
+    "protocol_version",
+    "started_at",
+    "completed_at",
+    "finalization_status",
+    "trust_state",
+    "trust_evaluation",
+    "provenance",
+    "result_ids",
+    "artifacts",
+    "evidence_policy",
+    "bundle_hash"
+  ],
+  "properties": {
+    "schema_version": { "const": "run-manifest@1.0.0" },
+    "run_id": { "type": "string", "pattern": "^[A-Z][A-Z0-9]*-[A-F0-9]{32}$" },
+    "project_id": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "environment_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,79}$" },
+    "source_commit": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "frozen_baseline_id": { "type": "string", "pattern": "^FBL-[A-F0-9]{32}$" },
+    "executor": { "enum": ["api", "ui", "mixed"] },
+    "protocol_version": { "type": "string", "pattern": "^[a-z0-9-]+@[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "started_at": { "type": "string", "format": "date-time" },
+    "completed_at": { "type": "string", "format": "date-time" },
+    "finalization_status": { "const": "completed" },
+    "trust_state": { "enum": ["unverified", "executed", "verified"] },
+    "trust_evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy_version", "determined_by", "verifier_version", "reproduction_result_id"],
+      "properties": {
+        "policy_version": { "const": "evidence-trust-policy@1.0.0" },
+        "determined_by": { "const": "deterministic_trust_evaluator" },
+        "verifier_version": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "reproduction_result_id": { "type": ["string", "null"], "maxLength": 100 }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "producer",
+        "producer_version",
+        "operating_system",
+        "python_version",
+        "browser_name",
+        "browser_version"
+      ],
+      "properties": {
+        "producer": { "const": "deterministic_executor" },
+        "producer_version": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "operating_system": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "python_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "node_version": { "type": ["string", "null"], "maxLength": 40 },
+        "playwright_version": { "type": ["string", "null"], "maxLength": 40 },
+        "browser_name": { "type": ["string", "null"], "maxLength": 40 },
+        "browser_version": { "type": ["string", "null"], "maxLength": 40 }
+      }
+    },
+    "source_run": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["run_id", "result_id", "manifest_hash"],
+      "properties": {
+        "run_id": { "type": "string", "pattern": "^[A-Z][A-Z0-9]*-[A-F0-9]{32}$" },
+        "result_id": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "manifest_hash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "result_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 100 }
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/artifact" }
+    },
+    "evidence_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action_tape_required",
+        "trace_required",
+        "screenshot_required",
+        "network_required",
+        "console_required",
+        "redaction_verified"
+      ],
+      "properties": {
+        "action_tape_required": { "type": "boolean" },
+        "trace_required": { "type": "boolean" },
+        "screenshot_required": { "type": "boolean" },
+        "network_required": { "type": "boolean" },
+        "console_required": { "type": "boolean" },
+        "redaction_verified": { "const": true }
+      }
+    },
+    "bundle_hash": { "$ref": "#/$defs/hash" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "trust_state": { "const": "verified" } },
+        "required": ["trust_state"]
+      },
+      "then": {
+        "properties": {
+          "trust_evaluation": {
+            "properties": {
+              "reproduction_result_id": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9._/-]+$"
+    },
+    "artifact": {
+      "$comment": "Artifact IDs and relative paths also require cross-item uniqueness in the domain validator.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "role",
+        "relative_path",
+        "mime_type",
+        "size_bytes",
+        "sha256",
+        "source_record_ids",
+        "redaction_status",
+        "integrity_status"
+      ],
+      "properties": {
+        "artifact_id": { "type": "string", "pattern": "^ART-[A-F0-9]{32}$" },
+        "role": {
+          "enum": [
+            "environment",
+            "execution_log",
+            "action_tape",
+            "result",
+            "api_exchange",
+            "screenshot",
+            "trace",
+            "network",
+            "console",
+            "reproduction",
+            "bug",
+            "report"
+          ]
+        },
+        "relative_path": { "$ref": "#/$defs/relativePath" },
+        "mime_type": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "size_bytes": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/hash" },
+        "source_record_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 100 }
+        },
+        "redaction_status": { "enum": ["verified", "not_applicable"] },
+        "integrity_status": { "const": "verified" }
+      }
+    }
+  }
+}

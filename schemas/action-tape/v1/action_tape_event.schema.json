@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-testpilot.local/schemas/action-tape/v1/action_tape_event.schema.json",
+  "title": "AI TestPilot deterministic Action Tape event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "sequence",
+    "timestamp",
+    "run_id",
+    "result_id",
+    "case_id",
+    "case_version",
+    "snapshot_id",
+    "executor",
+    "phase",
+    "action",
+    "resolved_target",
+    "value_source",
+    "value_sensitivity",
+    "value_display",
+    "state_before",
+    "state_after",
+    "status",
+    "evidence_artifact_ids",
+    "redaction_applied"
+  ],
+  "properties": {
+    "schema_version": { "const": "action-tape-event@1.0.0" },
+    "event_id": { "type": "string", "pattern": "^ATE-[A-F0-9]{32}$" },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "run_id": { "type": "string", "pattern": "^[A-Z][A-Z0-9]*-[A-F0-9]{32}$" },
+    "result_id": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "case_id": { "type": "string", "pattern": "^TC-(API|UI)-[A-Z0-9-]+$" },
+    "case_version": { "type": "integer", "minimum": 1 },
+    "snapshot_id": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "executor": { "enum": ["api", "ui"] },
+    "phase": { "enum": ["setup", "test", "assertion", "cleanup"] },
+    "action": {
+      "enum": ["fixture", "http_request", "goto", "fill", "click", "assert", "discard_run_database"]
+    },
+    "resolved_target": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "strategy": { "enum": ["route", "label", "role", "test_id", "http"] },
+        "role": { "type": ["string", "null"], "maxLength": 40 },
+        "name": { "type": ["string", "null"], "maxLength": 160 },
+        "path": { "type": ["string", "null"], "pattern": "^/" },
+        "method": {
+          "type": ["string", "null"],
+          "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", null]
+        }
+      }
+    },
+    "value_source": { "type": ["string", "null"], "maxLength": 160 },
+    "value_sensitivity": { "enum": ["not_applicable", "non_sensitive", "sensitive"] },
+    "value_display": { "type": ["string", "null"], "maxLength": 160 },
+    "state_before": { "$ref": "#/$defs/state" },
+    "state_after": { "$ref": "#/$defs/state" },
+    "status": { "enum": ["completed", "failed", "blocked", "error"] },
+    "evidence_artifact_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^ART-[A-F0-9]{32}$" }
+    },
+    "redaction_applied": { "const": true }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "value_sensitivity": { "const": "sensitive" } },
+        "required": ["value_sensitivity"]
+      },
+      "then": { "properties": { "value_display": { "const": "[REDACTED]" } } }
+    }
+  ],
+  "$defs": {
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["route", "captured_at"],
+      "properties": {
+        "route": { "type": ["string", "null"], "pattern": "^/" },
+        "captured_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

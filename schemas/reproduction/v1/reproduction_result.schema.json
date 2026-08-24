@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-testpilot.local/schemas/reproduction/v1/reproduction_result.schema.json",
+  "title": "AI TestPilot deterministic Bug reproduction result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "bug_id",
+    "source_run_id",
+    "source_result_id",
+    "source_manifest_hash",
+    "reproduction_run_id",
+    "reproduction_result_id",
+    "case_id",
+    "case_version",
+    "snapshot_id",
+    "snapshot_hash",
+    "oracle_unchanged",
+    "status",
+    "expected",
+    "actual",
+    "evidence_artifact_ids",
+    "action_tape_hash",
+    "reproduction_manifest_hash",
+    "determined_by",
+    "completed_at"
+  ],
+  "properties": {
+    "schema_version": { "const": "reproduction-result@1.0.0" },
+    "bug_id": { "type": "string", "pattern": "^BUG-[A-Z0-9-]+$" },
+    "source_run_id": { "type": "string", "pattern": "^[A-Z][A-Z0-9]*-[A-F0-9]{32}$" },
+    "source_result_id": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "source_manifest_hash": { "$ref": "#/$defs/hash" },
+    "reproduction_run_id": { "type": "string", "pattern": "^[A-Z][A-Z0-9]*-[A-F0-9]{32}$" },
+    "reproduction_result_id": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "case_id": { "type": "string", "pattern": "^TC-(API|UI)-[A-Z0-9-]+$" },
+    "case_version": { "type": "integer", "minimum": 1 },
+    "snapshot_id": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "snapshot_hash": { "$ref": "#/$defs/hash" },
+    "oracle_unchanged": { "const": true },
+    "status": { "enum": ["REPRODUCED", "NOT_REPRODUCED", "BLOCKED", "ERROR"] },
+    "expected": {},
+    "actual": {},
+    "evidence_artifact_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^ART-[A-F0-9]{32}$" }
+    },
+    "action_tape_hash": { "$ref": "#/$defs/hash" },
+    "reproduction_manifest_hash": { "$ref": "#/$defs/hash" },
+    "determined_by": { "const": "deterministic_reproduction_runner" },
+    "completed_at": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  }
+}

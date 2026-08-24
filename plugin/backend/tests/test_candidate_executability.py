@@ -94,6 +94,28 @@ def test_nonexistent_api_and_ui_targets_are_rejected() -> None:
     } <= codes
 
 
+def test_ui_action_contract_matches_executor_and_real_route_controls() -> None:
+    candidate = {
+        "case_id": "TC-UI-X",
+        "case_type": "ui",
+        "test_data": [{"name": "username", "value": "user", "sensitive": False}],
+        "type_details": {
+            "route": "/login",
+            "locator_intents": [
+                {"strategy": "label", "value": "Username"},
+                {"strategy": "role", "value": "Sign in"},
+            ],
+            "user_actions": ["fill:label:Username", "click:role:Sign in"],
+        },
+    }
+    assert validate_candidate_executability(candidate) == []
+    candidate["type_details"]["user_actions"][0] = "navigate:route:/login"
+    candidate["type_details"]["locator_intents"][1]["value"] = "Content"
+    codes = {finding.code for finding in validate_candidate_executability(candidate)}
+    assert "UI_ACTION_UNSTRUCTURED" in codes
+    assert "UI_ROLE_LOCATOR_NOT_IN_ROUTE_CONTRACT" in codes
+
+
 def test_non_seeded_api_case_is_not_rewritten_by_seeded_rules() -> None:
     candidate = deepcopy(_api_candidate())
     candidate["case_id"] = "TC-API-OTHER"

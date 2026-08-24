@@ -787,15 +787,15 @@ def test_phase6_human_revision_preserves_original_and_gates_automation(
     revised["type_details"].update(
         {
             "route": "/profile",
-            "locator_intents": [{"strategy": "role", "value": "Logout"}],
-            "user_actions": ["click:role:Logout"],
+            "locator_intents": [{"strategy": "role", "value": "Sign out"}],
+            "user_actions": ["click:role:Sign out"],
         }
     )
     valid_revision = service.create_human_revision(
         generation.run_id,
         item["case_id"],
         revised_by="portfolio-owner",
-        revision_reason="Use the implemented profile route and accessible Logout control.",
+        revision_reason="Use the implemented profile route and accessible Sign out control.",
         expected_content_hash=item["content_hash"],
         candidate=revised,
     )

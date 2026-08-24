@@ -1,5 +1,23 @@
 # Phase 13 End-to-End Results
 
+## UI recovery `E2E-20260824T141003Z`
+
+Recovery Run `TGR-439D29BEC8684353823C26EF1B407569` reused API-001 through API-004,
+validated API-005 through API-008 and UI-001, then stopped at UI-002. Eight successful HTTP calls
+used 10,308 input and 8,739 output tokens and cost US$0.011424. The initial and corrected UI-002
+responses each consumed one call; no Candidate collection was promoted.
+
+Offline replay established that `fill:label:Username` is already the formal three-part executor
+grammar: the last segment names the control, while the approved executor obtains its input from
+`test_data` through a deterministic label mapping. The actual contract defects were `navigate`
+instead of `goto`, generic `Submit` instead of the route's real accessible button name, and a
+remaining `role=Content` locator that does not identify any React button. Compatibility `1.31.0`
+maps only the first two unambiguous aliases and keeps `Content` rejected. Consequently UI-002 is
+not a reusable checkpoint. Current read-only recovery planning revalidates API-001 through API-008
+and UI-001, and requires Provider generation for UI-002 through UI-006 and Manual-001 through
+Manual-004: nine initial content calls, at most eight corrections, and at most seventeen content
+calls. The failed Session, Run, calls, cost, responses, and database remain unchanged.
+
 ## Generation recovery `E2E-20260824T132802Z`
 
 The unique authorized recovery reused Analysis Run

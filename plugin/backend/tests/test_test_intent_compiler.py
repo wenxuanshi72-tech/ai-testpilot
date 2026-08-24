@@ -161,6 +161,48 @@ def test_existing_setup_string_and_http_request_remain_unchanged() -> None:
     ]
 
 
+def test_ui_navigation_and_submit_aliases_use_executor_contract_with_audit() -> None:
+    raw = _example("ui")
+    raw["type_intent"]["route"] = "/login"
+    raw["type_intent"]["locator_intents"] = [
+        {"strategy": "label", "value": "Username"},
+        {"strategy": "role", "value": "Submit"},
+    ]
+    raw["type_intent"]["user_actions"] = [
+        "navigate:route:/login",
+        "fill:label:Username",
+        "click:role:Submit",
+    ]
+    accepted = normalize_intent_batch({"intents": [raw]})["intents"][0]
+    assert accepted["type_intent"]["user_actions"] == [
+        "goto:route:/login",
+        "fill:label:Username",
+        "click:role:Sign in",
+    ]
+    assert accepted["type_intent"]["locator_intents"][1] == {
+        "strategy": "role",
+        "value": "Sign in",
+    }
+    records = compatibility_audit_records([raw])
+    assert {item["rule"] for item in records} >= {
+        "navigate_action_to_goto",
+        "route_submit_to_accessible_name",
+    }
+
+
+def test_ui_aliases_are_not_guessed_without_unique_route_mapping() -> None:
+    raw = _example("ui")
+    raw["type_intent"]["route"] = "/profile"
+    raw["type_intent"]["locator_intents"] = [{"strategy": "role", "value": "Content"}]
+    raw["type_intent"]["user_actions"] = ["goto:route:/profile"]
+    accepted = normalize_intent_batch({"intents": [raw]})["intents"][0]
+    assert accepted["type_intent"]["locator_intents"] == [{"strategy": "role", "value": "Content"}]
+    candidate = DeterministicCandidateCompiler().compile(accepted, _context("ui", accepted))
+    assert {item.code for item in validate_candidate_executability(candidate)} == {
+        "UI_ROLE_LOCATOR_NOT_IN_ROUTE_CONTRACT"
+    }
+
+
 def test_compatibility_accepts_authorization_and_nullable_test_data_with_audit() -> None:
     intent = _example("api")
     intent["scenario_type"] = "authorization"
@@ -178,7 +220,7 @@ def test_compatibility_accepts_authorization_and_nullable_test_data_with_audit()
             "original": "authorization",
             "accepted_as": "security",
             "rule": "authorization_to_security",
-            "compatibility_version": "test-intent-compatibility@1.30.0",
+            "compatibility_version": "test-intent-compatibility@1.31.0",
         },
         {
             "generation_slot_id": intent["generation_slot_id"],
@@ -186,7 +228,7 @@ def test_compatibility_accepts_authorization_and_nullable_test_data_with_audit()
             "original_type": "null",
             "accepted_type": "null",
             "rule": "nullable_test_data_value",
-            "compatibility_version": "test-intent-compatibility@1.30.0",
+            "compatibility_version": "test-intent-compatibility@1.31.0",
         },
     ]
 
@@ -206,7 +248,7 @@ def test_functional_scenario_is_preserved_as_candidate_category() -> None:
             "original": "functional",
             "accepted_as": "functional",
             "rule": "functional_category_passthrough",
-            "compatibility_version": "test-intent-compatibility@1.30.0",
+            "compatibility_version": "test-intent-compatibility@1.31.0",
         }
     ]
 
@@ -237,7 +279,7 @@ def test_session_semantics_aliases_compile_to_anonymous_with_audit() -> None:
                 "original": alias,
                 "accepted_as": "anonymous",
                 "rule": "descriptive_session_to_canonical",
-                "compatibility_version": "test-intent-compatibility@1.30.0",
+                "compatibility_version": "test-intent-compatibility@1.31.0",
             }
         ]
 
@@ -447,7 +489,7 @@ def test_missing_cleanup_is_normalized_to_audited_no_cleanup() -> None:
             "original_type": "missing",
             "accepted_type": "no_cleanup",
             "rule": "missing_cleanup_to_no_cleanup",
-            "compatibility_version": "test-intent-compatibility@1.30.0",
+            "compatibility_version": "test-intent-compatibility@1.31.0",
         }
     ]
 
@@ -469,7 +511,7 @@ def test_quality_scenario_is_normalized_to_audited_functional() -> None:
             "original": "quality",
             "accepted_as": "functional",
             "rule": "model_functional_alias_to_functional",
-            "compatibility_version": "test-intent-compatibility@1.30.0",
+            "compatibility_version": "test-intent-compatibility@1.31.0",
         }
     ]
 
@@ -519,7 +561,7 @@ def test_model_functional_aliases_are_audited(alias: str) -> None:
             "original": alias,
             "accepted_as": "functional",
             "rule": "model_functional_alias_to_functional",
-            "compatibility_version": "test-intent-compatibility@1.30.0",
+            "compatibility_version": "test-intent-compatibility@1.31.0",
         }
     ]
 

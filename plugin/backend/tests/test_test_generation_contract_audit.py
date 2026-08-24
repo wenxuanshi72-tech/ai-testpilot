@@ -92,7 +92,7 @@ def test_prompt_contract_and_examples_are_final_semantic_protocol() -> None:
     assert TEST_GENERATION_PROMPT_VERSION == "test-generation@3.0.0"
     assert TEST_INTENT_SCHEMA_VERSION == "test-intent@2.9.0"
     assert TEST_CASE_SCHEMA_VERSION == "test-cases@1.8.0"
-    assert TEST_INTENT_COMPILER_VERSION == "deterministic-candidate-compiler@2.33.0"
+    assert TEST_INTENT_COMPILER_VERSION == "deterministic-candidate-compiler@2.34.0"
     assert set(reports) == {"api", "ui", "manual"}
     assert all(set(item["example"]) == INTENT_FIELDS for item in reports.values())
     assert all(not set(item["example"]) & FORBIDDEN_MODEL_FIELDS for item in reports.values())

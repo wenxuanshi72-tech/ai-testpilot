@@ -11,9 +11,10 @@ from typing import Any
 from plugin.backend.app.providers import ProviderMetadata
 from plugin.backend.app.test_generation_prompts import TEST_GENERATION_PROMPT_VERSION
 from plugin.backend.app.test_generation_schemas import TEST_CASE_SCHEMA_VERSION, TestCaseSchemas
+from plugin.backend.app.test_generation_trace import is_seeded_username_requirement_id
 
-TEST_INTENT_COMPILER_VERSION = "deterministic-candidate-compiler@2.32.0"
-TEST_INTENT_COMPATIBILITY_VERSION = "test-intent-compatibility@1.29.0"
+TEST_INTENT_COMPILER_VERSION = "deterministic-candidate-compiler@2.34.0"
+TEST_INTENT_COMPATIBILITY_VERSION = "test-intent-compatibility@1.31.0"
 SCENARIO_TO_CATEGORY = {
     "positive": "positive",
     "negative": "negative",
@@ -212,6 +213,34 @@ def incomplete_setup_to_instruction(setup: dict[str, Any]) -> str | None:
     return None
 
 
+UNSAFE_CONFIGURATION_INSTRUCTION = re.compile(
+    r"(?:"
+    r"\b(?:select|insert|update|delete|drop|alter|truncate|pragma)\b|"
+    r"\b(?:powershell|cmd\.exe|bash|sh\s+-c|invoke-expression|subprocess|os\.system)\b|"
+    r"\b(?:rm|curl|wget)\s+-|"
+    r"(?:eval|exec)\s*\(|"
+    r"[A-Za-z]:\\|"
+    r"(?:^|\s)/(?:etc|var|home|users|tmp)/"
+    r")",
+    flags=re.IGNORECASE,
+)
+
+
+def configuration_setup_to_instruction(setup: dict[str, Any]) -> str | None:
+    """Accept only an unambiguous, non-executable model config wrapper."""
+    if set(setup) != {"type", "description"} or setup.get("type") != "config":
+        return None
+    description = setup.get("description")
+    if not isinstance(description, str):
+        return None
+    normalized = description.strip()
+    if not normalized or len(normalized) > 600:
+        return None
+    if UNSAFE_CONFIGURATION_INSTRUCTION.search(normalized):
+        return None
+    return normalized
+
+
 def normalize_tag_slug(value: Any) -> str | None:
     if not isinstance(value, str):
         return None
@@ -406,6 +435,49 @@ def compatibility_audit_records(intents: list[dict[str, Any]]) -> list[dict[str,
                 }
             )
         if isinstance(type_intent, dict) and "route" in type_intent:
+            route = type_intent.get("route")
+            submit_name = {"/register": "Create account", "/login": "Sign in"}.get(
+                route if isinstance(route, str) else ""
+            )
+            for index, action in enumerate(type_intent.get("user_actions") or []):
+                if isinstance(action, str) and (
+                    action.startswith("navigate:route:") or action.startswith("navigate:/")
+                ):
+                    records.append(
+                        {
+                            "generation_slot_id": slot_id,
+                            "field": f"type_intent/user_actions/{index}",
+                            "original": action,
+                            "accepted_as": action.replace("navigate:route:", "goto:route:", 1)
+                            if action.startswith("navigate:route:")
+                            else f"goto:route:{action.removeprefix('navigate:')}",
+                            "rule": "navigate_action_to_goto",
+                            "compatibility_version": TEST_INTENT_COMPATIBILITY_VERSION,
+                        }
+                    )
+                if submit_name and action == "click:role:Submit":
+                    records.append(
+                        {
+                            "generation_slot_id": slot_id,
+                            "field": f"type_intent/user_actions/{index}",
+                            "original": action,
+                            "accepted_as": f"click:role:{submit_name}",
+                            "rule": "route_submit_to_accessible_name",
+                            "compatibility_version": TEST_INTENT_COMPATIBILITY_VERSION,
+                        }
+                    )
+            for index, locator in enumerate(type_intent.get("locator_intents") or []):
+                if submit_name and locator == {"strategy": "role", "value": "Submit"}:
+                    records.append(
+                        {
+                            "generation_slot_id": slot_id,
+                            "field": f"type_intent/locator_intents/{index}/value",
+                            "original": "Submit",
+                            "accepted_as": submit_name,
+                            "rule": "route_submit_to_accessible_name",
+                            "compatibility_version": TEST_INTENT_COMPATIBILITY_VERSION,
+                        }
+                    )
             for field in (
                 "locator_intents",
                 "user_actions",
@@ -528,6 +600,9 @@ def compatibility_audit_records(intents: list[dict[str, Any]]) -> list[dict[str,
         if isinstance(type_intent, dict):
             for index, setup in enumerate(type_intent.get("setup_semantics") or []):
                 if isinstance(setup, dict):
+                    is_configuration_instruction = (
+                        configuration_setup_to_instruction(setup) is not None
+                    )
                     is_action_instruction = (
                         "instruction" in setup and "method" not in setup and "path" not in setup
                     )
@@ -541,11 +616,16 @@ def compatibility_audit_records(intents: list[dict[str, Any]]) -> list[dict[str,
                             "original_type": "object",
                             "accepted_type": (
                                 "setup_instruction"
-                                if is_action_instruction or is_incomplete_api or is_descriptive
+                                if is_configuration_instruction
+                                or is_action_instruction
+                                or is_incomplete_api
+                                or is_descriptive
                                 else "setup_api_request"
                             ),
                             "rule": (
-                                "non_http_setup_to_instruction"
+                                "configuration_setup_to_instruction"
+                                if is_configuration_instruction
+                                else "non_http_setup_to_instruction"
                                 if is_descriptive
                                 else "incomplete_setup_to_instruction"
                                 if is_incomplete_api
@@ -821,6 +901,24 @@ def normalize_intent_batch(parsed: dict[str, Any]) -> dict[str, Any]:
             ):
                 if details.get(field) is None:
                     details[field] = []
+            route_value = details.get("route")
+            submit_name = {"/register": "Create account", "/login": "Sign in"}.get(
+                route_value if isinstance(route_value, str) else ""
+            )
+            details["user_actions"] = [
+                action.replace("navigate:route:", "goto:route:", 1)
+                if isinstance(action, str) and action.startswith("navigate:route:")
+                else f"goto:route:{action.removeprefix('navigate:')}"
+                if isinstance(action, str) and action.startswith("navigate:/")
+                else f"click:role:{submit_name}"
+                if submit_name and action == "click:role:Submit"
+                else action
+                for action in details["user_actions"]
+            ]
+            if submit_name:
+                for locator in details["locator_intents"]:
+                    if locator == {"strategy": "role", "value": "Submit"}:
+                        locator["value"] = submit_name
         route = details.get("route")
         if is_ui_intent and isinstance(route, str):
             normalized_route = route.strip()
@@ -924,7 +1022,8 @@ def normalize_intent_batch(parsed: dict[str, Any]) -> dict[str, Any]:
                     setup.setdefault("description", str(setup.get("action") or fallback))
                     setup.pop("action", None)
                 normalized_setup = (
-                    descriptive_setup_to_instruction(setup)
+                    configuration_setup_to_instruction(setup)
+                    or descriptive_setup_to_instruction(setup)
                     or action_setup_to_api(setup)
                     or structured_setup_to_api(setup)
                     if isinstance(setup, dict)
@@ -999,7 +1098,18 @@ class DeterministicCandidateCompiler:
             "risk_level": intent["risk_level"],
             "test_level": "manual" if case_type == "manual" else "system",
             "test_category": SCENARIO_TO_CATEGORY[intent["scenario_type"]],
-            "preconditions": intent["preconditions"],
+            "preconditions": list(
+                dict.fromkeys(
+                    [
+                        *intent["preconditions"],
+                        *[
+                            setup
+                            for setup in intent.get("type_intent", {}).get("setup_semantics", [])
+                            if case_type == "api" and isinstance(setup, str)
+                        ],
+                    ]
+                )
+            ),
             "test_data": [
                 {
                     "name": f"data_{index:03d}",
@@ -1058,8 +1168,9 @@ class DeterministicCandidateCompiler:
         if not (
             slot["case_id"] == "TC-API-AUTH-REG-005"
             and slot["case_type"] == "api"
-            and slot["primary_requirement_id"] == "REQ-BAT-002-6"
-            and slot["requirement_ids"] == ["REQ-BAT-002-6"]
+            and is_seeded_username_requirement_id(str(slot["primary_requirement_id"]))
+            and len(slot["requirement_ids"]) == 1
+            and is_seeded_username_requirement_id(str(slot["requirement_ids"][0]))
         ):
             return
         candidate["test_data"] = [
@@ -1140,7 +1251,9 @@ class DeterministicCandidateCompiler:
                 "response_schema_assertions": details["response_expectations"],
                 "security_assertions": details["security_expectations"],
                 "state_assertions": details["state_expectations"],
-                "setup_requests": details["setup_semantics"],
+                "setup_requests": [
+                    setup for setup in details["setup_semantics"] if isinstance(setup, dict)
+                ],
                 "cleanup_requests": cleanup,
             }
         if case_type == "ui":

@@ -6,7 +6,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 PROMPT_ROOT = PROJECT_ROOT / "prompts" / "prd-analysis" / "v2"
-PROMPT_VERSION = "prd-analysis@2.0.0"
+PROMPT_VERSION = "prd-analysis@2.1.0"
 RECOVERY_PROMPT_VERSION = "prd-analysis-recovery@2.0.0"
 SCHEMA_VERSION = "requirements@2.0.0"
 
@@ -15,6 +15,7 @@ class PromptRegistry:
     required_files = (
         "outline_system.md",
         "outline_user.md",
+        "outline_repair_system.md",
         "requirements_system.md",
         "requirements_user.md",
         "repair_system.md",
@@ -40,6 +41,25 @@ class PromptRegistry:
             {
                 "role": "user",
                 "content": self._content["outline_user.md"].replace("{{prd_text}}", prd_text),
+            },
+        ]
+
+    def outline_correction_messages(
+        self, prd_text: str, invalid_outline: dict[str, object], validation_error: str
+    ) -> list[dict[str, str]]:
+        return [
+            {"role": "system", "content": self._content["outline_system.md"]},
+            {"role": "system", "content": self._content["outline_repair_system.md"]},
+            {
+                "role": "user",
+                "content": self._content["outline_user.md"].replace("{{prd_text}}", prd_text),
+            },
+            {
+                "role": "user",
+                "content": "INVALID_OUTLINE\n"
+                + json.dumps(invalid_outline, ensure_ascii=False, separators=(",", ":"))
+                + "\nVALIDATION_ERROR\n"
+                + validation_error,
             },
         ]
 

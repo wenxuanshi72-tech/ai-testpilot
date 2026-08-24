@@ -21,6 +21,12 @@ from plugin.backend.app.test_generation_prompts import (
     TEST_GENERATION_PROMPT_VERSION,
     TestGenerationPromptRegistry,
 )
+from plugin.backend.app.test_generation_trace import (
+    SeededRequirementResolutionError,
+    assert_unique_requirement_identities,
+    is_seeded_username_requirement_id,
+    resolve_seeded_username_requirement,
+)
 from plugin.backend.app.test_intent_mock import build_mock_intent_batch
 from plugin.backend.app.test_intent_schemas import TEST_INTENT_SCHEMA_VERSION
 
@@ -63,10 +69,17 @@ class BatchCapacity:
         return value
 
 
-def make_generation_slot(requirement_id: str, case_type: str) -> dict[str, Any]:
+def make_generation_slot(
+    requirement_id: str, case_type: str, *, seeded_requirement_id: str | None = None
+) -> dict[str, Any]:
     label = {"api": "API", "ui": "UI", "manual": "MAN"}[case_type]
     digest = hashlib.sha256(f"{case_type}:{requirement_id}".encode()).hexdigest()[:16].upper()
-    if requirement_id == "REQ-BAT-002-6" and case_type in {"api", "ui"}:
+    seeded = (
+        requirement_id == seeded_requirement_id
+        if seeded_requirement_id is not None
+        else is_seeded_username_requirement_id(requirement_id)
+    )
+    if seeded and case_type in {"api", "ui"}:
         case_id = f"TC-{label}-AUTH-REG-005"
     else:
         suffix = re.sub(r"[^A-Z0-9]+", "-", requirement_id.upper()).strip("-")[:60]
@@ -108,12 +121,22 @@ def build_capacity_bounded_batches(
     input_budget_tokens: int = DEFAULT_INPUT_BUDGET_TOKENS,
     output_utilization_percent: int = DEFAULT_OUTPUT_UTILIZATION_PERCENT,
 ) -> tuple[list[dict[str, Any]], list[BatchCapacity]]:
+    try:
+        assert_unique_requirement_identities(list(snapshots))
+        seeded_requirement_id = resolve_seeded_username_requirement(
+            snapshots
+        ).resolved_requirement_id
+    except SeededRequirementResolutionError as error:
+        raise CapacityPlanningError(str(error)) from error
     batches = []
     capacities = []
     batch_index = 1
     labels = {"api": "API", "ui": "UI", "manual": "MAN"}
     for case_type in ("api", "ui", "manual"):
-        pending = [make_generation_slot(rid, case_type) for rid in applicability[case_type]]
+        pending = [
+            make_generation_slot(rid, case_type, seeded_requirement_id=seeded_requirement_id)
+            for rid in applicability[case_type]
+        ]
         if case_type == "manual":
             _assign_manual_accessibility_slot(pending, snapshots)
         type_index = 1

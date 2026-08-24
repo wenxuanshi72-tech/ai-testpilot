@@ -23,7 +23,7 @@ def test_existing_0003_database_upgrades_through_phase6(
             )
     database = PluginDatabase(f"sqlite:///{database_path.as_posix()}")
     database.migrate()
-    assert database.fetch_one("SELECT COUNT(*) AS count FROM schema_migrations") == {"count": 13}
+    assert database.fetch_one("SELECT COUNT(*) AS count FROM schema_migrations") == {"count": 14}
     assert database.fetch_one("PRAGMA integrity_check") == {"integrity_check": "ok"}
     assert database.fetch_all("PRAGMA foreign_key_check") == []
     tables = {

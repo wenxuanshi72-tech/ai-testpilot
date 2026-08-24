@@ -42,7 +42,7 @@ class TestGenerationPromptRegistry:
             f"method={','.join(setup['properties']['method']['enum'])};"
             f"path_pattern={setup['properties']['path']['pattern']};"
             f"additionalProperties={str(setup['additionalProperties']).lower()};"
-            "non-HTTP=>string;path!=N/A."
+            "non-HTTP/config=>string;never type=config object;path!=N/A."
         )
 
     @property
@@ -103,6 +103,9 @@ class TestGenerationPromptRegistry:
                     "Obey the setup contract in the API system message exactly."
                 )
             recovery_content = recovery_content.replace("{{type_recovery_rules}}", type_rules)
+            recovery_content = recovery_content.replace(
+                "{{expected_intent_count}}", str(len(generation_slots))
+            )
             recovery_content = self._replace_api_contract_values(recovery_content)
             messages.append({"role": "system", "content": recovery_content})
         messages.append({"role": "user", "content": user})

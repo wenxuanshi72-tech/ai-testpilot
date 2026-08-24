@@ -86,6 +86,11 @@ class BudgetGuardProvider:
     def analyze_outline(self, prd_text: str) -> ProviderResponse:
         raise ProviderConfigurationError("PHASE5A_CALL_FORBIDDEN")
 
+    def correct_outline(
+        self, prd_text: str, invalid_outline: dict[str, object], validation_error: str
+    ) -> ProviderResponse:
+        raise ProviderConfigurationError("PHASE5A_CALL_FORBIDDEN")
+
     def extract_requirements_batch(self, **_kwargs: Any) -> ProviderResponse:
         raise ProviderConfigurationError("PHASE5A_CALL_FORBIDDEN")
 

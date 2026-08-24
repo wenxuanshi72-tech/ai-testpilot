@@ -21,8 +21,13 @@ SESSION_FIXTURES = {
     "revoked_session": ({"action": "create_authenticated_session", "state": "revoked"},),
 }
 UI_ACTION_PATTERN = re.compile(
-    r"^(goto|fill|click|select|check|uncheck|wait_for):[a-z0-9_-]+(?::[^:\r\n]{1,160}){0,2}$"
+    r"^(?:goto:route:/[A-Za-z0-9_./{}*-]*|fill:label:[^:\r\n]{1,160}|click:role:[^:\r\n]{1,160})$"
 )
+UI_ROLE_NAMES = {
+    "/register": {"Create account"},
+    "/login": {"Sign in"},
+    "/profile": {"Sign out"},
+}
 
 
 @dataclass(frozen=True)
@@ -186,6 +191,16 @@ def _validate_ui(candidate: dict[str, Any], findings: list[ExecutabilityFinding]
                     "UI_ROLE_LOCATOR_MISSING_ACCESSIBLE_NAME",
                     f"/type_details/locator_intents/{index}",
                     "Role-only locators require an accessible name.",
+                )
+            )
+        elif locator.get("strategy") == "role" and locator.get("value") not in UI_ROLE_NAMES.get(
+            details.get("route"), set()
+        ):
+            findings.append(
+                ExecutabilityFinding(
+                    "UI_ROLE_LOCATOR_NOT_IN_ROUTE_CONTRACT",
+                    f"/type_details/locator_intents/{index}",
+                    "Role locator must name a real button on the target React route.",
                 )
             )
     for index, action in enumerate(actions):

@@ -3,16 +3,16 @@
 ## Active contract
 
 - Prompt: `test-generation@3.0.0`
-- Prompt hash: `00f264ae89c4f8724469a249b57893b2e17c1d0717e604f87719cf2837425e55`
+- Prompt hash: `a0fb9a331142e4d05fe5016433adf9a77af9a29aaba7928fdbed2853988c735f`
 - Model-output Schema: `test-intent@2.9.0`
 - Intent Schema hash: `44058ea133f732a54a8c1b6e68dbbe84743cb473d613730fc558e3eb65efa657`
 - Candidate Schema: `test-cases@1.8.0`
 - Candidate Schema hash: `2261d9996b5bada0e95f6bbf58a6443b05373d99ec05fdc8d0f81272e82437d1`
-- Compiler: `deterministic-candidate-compiler@2.29.0`
-- Compiler file SHA-256: `964cbdca256b942a81a60106dd3c6783a74073e7b351408f0888ff92dcadbf3c`
+- Compiler: `deterministic-candidate-compiler@2.33.0`
+- Compiler file SHA-256: `abffe9b2f300718df3a9a6d8982b4ec0130e7313fe66d15957867749a0b67fa9`
 - Provider/model: explicit DeepSeek Real / `deepseek-v4-pro`, or explicit Mock for offline tests
-- Compatibility policy: `authorization` is accepted and deterministically compiled as `security`; `functional` is preserved as the independent candidate category `functional`; `test_data[].value` accepts string or `null`; canonical and descriptive API session semantics, missing request bodies, empty semantic values, and structured or action/instruction setup requests are normalized deterministically with field-level audit; API-only fields are not injected into UI or Manual intents.
-- Compatibility audit: the parsed artifact retains the model value, while `intent_batch_compiled` records the slot, field, rule, original type/value category, accepted category/type, and `test-intent-compatibility@1.28.0`.
+- Compatibility policy: `authorization` is accepted and deterministically compiled as `security`; `functional` is preserved as the independent candidate category `functional`; `test_data[].value` accepts string or `null`; canonical and descriptive API session semantics, missing request bodies, empty semantic values, and structured or action/instruction setup requests are normalized deterministically with field-level audit. A setup object whose exact keys are `type` and `description`, whose type is `config`, and whose safe description is non-empty becomes a declarative precondition string; it never becomes an executor operation. API-only fields are not injected into UI or Manual intents.
+- Compatibility audit: the parsed artifact retains the model value, while `intent_batch_compiled` records the slot, field, rule, original type/value category, accepted category/type, and `test-intent-compatibility@1.30.0`.
 
 API, UI, and Manual prompts each contain one complete legal semantic example. The only identifier the model may return is an allowed `generation_slot_id`; requirement IDs, case/type IDs, run/batch metadata, states, timestamps, hashes, links, and audit fields are forbidden. Corrections replace the complete same-batch Intent response and receive only an exact redacted error.
 

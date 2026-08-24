@@ -1,5 +1,23 @@
 # Phase 13 End-to-End Results
 
+## Generation recovery `E2E-20260824T132802Z`
+
+The unique authorized recovery reused Analysis Run
+`ANR-8D946E45913A418F899774282E8121C2` and created Test Generation Run
+`TGR-241BCA9DF8544A8BB554A9B9B2694A26`. API-001 through API-004 validated; API-005 stopped the
+run after its initial response and one same-batch correction both returned HTTP 200 with
+`finish_reason=stop` but failed the Intent Schema. Eight content calls used 11,783 input and 10,156
+output tokens and cost US$0.012636. No network retry, Candidate, requirement link, approval, or
+baseline was created.
+
+The corrected response wrapped two safe CORS configuration prerequisites as exact
+`type=config`/`description` objects. Compatibility `1.30.0` deterministically retains their complete
+descriptions as declarative preconditions, never executor actions. Strict replay also found a third
+`type=setup` object describing a natural-language database prerequisite. That object is outside the
+approved mapping and remains rejected; the saved API-005 checkpoint therefore cannot be promoted.
+The next recovery may reuse API-001 through API-004, while API-005 and all ungenerated batches
+require normal Provider generation. The failed Session, calls, cost, and artifacts remain immutable.
+
 ## Dynamic generation-plan offline remediation
 
 The second isolated Analysis Run `ANR-8D946E45913A418F899774282E8121C2` and its 19 formal

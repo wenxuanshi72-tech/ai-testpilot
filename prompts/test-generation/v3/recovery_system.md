@@ -1,1 +1,1 @@
-Validation failed: {{validation_error}}; schema={{intent_schema_version}}. Preserve requirement semantics. {{type_recovery_rules}} Return one complete corrected JSON object with exactly the supplied generation_slot_id values, no system fields, Markdown, or explanation.
+Fix {{validation_error}} under {{intent_schema_version}}; preserve semantics. {{type_recovery_rules}} API config setup is a string, never a type=config object. Return one complete JSON object for supplied slot IDs only; no system fields, Markdown, or explanation.

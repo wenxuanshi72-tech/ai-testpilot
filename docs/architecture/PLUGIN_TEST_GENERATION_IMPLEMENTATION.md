@@ -30,7 +30,7 @@ The offline plan contains 46 slots in 17 initial batches (API 7, UI 6, Manual 4)
 - Model-output Schema: `test-intent@2.9.0`
 - Candidate Schema: `test-cases@1.8.0`
 - Planner: `test-generation-capacity-planner@2.0.0`
-- Compiler: `deterministic-candidate-compiler@2.29.0`
+- Compiler: `deterministic-candidate-compiler@2.33.0`
 - Parser: `test-generation-json-parser@1.0.0`
 
 阶段5B产物尚未经过人工审核，不得直接用于正式执行；必须在阶段6批准和冻结后才能成为执行基线。

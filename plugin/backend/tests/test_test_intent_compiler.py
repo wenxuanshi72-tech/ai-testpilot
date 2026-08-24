@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 from jsonschema import ValidationError
 
+from plugin.backend.app.candidate_executability import validate_candidate_executability
 from plugin.backend.app.database import PluginDatabase
 from plugin.backend.app.providers import MockLLMProvider, ProviderMetadata, ProviderResponse
 from plugin.backend.app.test_generation import TestGenerationService
@@ -17,6 +18,7 @@ from plugin.backend.app.test_intent_compiler import (
     DeterministicCandidateCompiler,
     TestIntentCompilationError,
     compatibility_audit_records,
+    configuration_setup_to_instruction,
     normalize_intent_batch,
     structured_setup_to_api,
 )
@@ -76,6 +78,89 @@ def test_compiler_preserves_semantics_and_injects_only_system_metadata() -> None
     assert second["semantic_content_hash"] == candidate["semantic_content_hash"]
 
 
+def test_configuration_setup_wrapper_becomes_safe_precondition_with_audit() -> None:
+    raw = _example("api")
+    raw["type_intent"]["setup_semantics"] = [
+        {
+            "type": "config",
+            "description": "Configure the server to require credentials for CORS.",
+        },
+        {
+            "type": "config",
+            "description": (
+                "Configure an exact local-origin allowlist that does not include the wildcard."
+            ),
+        },
+    ]
+
+    accepted = normalize_intent_batch({"intents": [raw]})["intents"][0]
+    assert accepted["type_intent"]["setup_semantics"] == [
+        "Configure the server to require credentials for CORS.",
+        "Configure an exact local-origin allowlist that does not include the wildcard.",
+    ]
+    TestIntentSchemas().validate("api_intent_batch.schema.json", {"intents": [accepted]})
+    candidate = DeterministicCandidateCompiler().compile(accepted, _context("api", accepted))
+    assert candidate["type_details"]["setup_requests"] == []
+    assert accepted["type_intent"]["setup_semantics"][0] in candidate["preconditions"]
+    assert accepted["type_intent"]["setup_semantics"][1] in candidate["preconditions"]
+    assert validate_candidate_executability(candidate) == []
+    records = compatibility_audit_records([raw])
+    assert [item["rule"] for item in records if "setup_semantics" in item["field"]] == [
+        "configuration_setup_to_instruction",
+        "configuration_setup_to_instruction",
+    ]
+
+
+@pytest.mark.parametrize(
+    "setup",
+    [
+        {"type": "config", "description": ""},
+        {"type": "config", "description": "Configure CORS.", "extra": True},
+        {"type": "fixture", "description": "Configure CORS."},
+        {
+            "type": "config",
+            "description": "Configure CORS.",
+            "method": "POST",
+            "path": "/api/auth/register",
+        },
+        {"type": "config", "description": "DELETE FROM users"},
+        {
+            "type": "setup",
+            "description": "Ensure the user exists in the database with a known password hash.",
+        },
+        {"type": "config", "description": "powershell -File C:\\unsafe.ps1"},
+        {"type": "config", "description": "Read /etc/passwd"},
+        {"type": "config", "description": "eval(payload)"},
+    ],
+)
+def test_configuration_setup_wrapper_rejects_ambiguous_or_unsafe_values(
+    setup: dict[str, Any],
+) -> None:
+    assert configuration_setup_to_instruction(setup) is None
+    raw = _example("api")
+    raw["type_intent"]["setup_semantics"] = [setup]
+    accepted = normalize_intent_batch({"intents": [raw]})
+    with pytest.raises(ValidationError):
+        TestIntentSchemas().validate("api_intent_batch.schema.json", accepted)
+
+
+def test_existing_setup_string_and_http_request_remain_unchanged() -> None:
+    raw = _example("api")
+    setup_request = {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "request_body": None,
+        "expected_status": 200,
+        "description": "Create an authenticated session.",
+    }
+    raw["type_intent"]["setup_semantics"] = ["Use an isolated database.", setup_request]
+    accepted = normalize_intent_batch({"intents": [raw]})["intents"][0]
+    assert accepted["type_intent"]["setup_semantics"] == [
+        "Use an isolated database.",
+        setup_request,
+    ]
+
+
 def test_compatibility_accepts_authorization_and_nullable_test_data_with_audit() -> None:
     intent = _example("api")
     intent["scenario_type"] = "authorization"
@@ -93,7 +178,7 @@ def test_compatibility_accepts_authorization_and_nullable_test_data_with_audit()
             "original": "authorization",
             "accepted_as": "security",
             "rule": "authorization_to_security",
-            "compatibility_version": "test-intent-compatibility@1.29.0",
+            "compatibility_version": "test-intent-compatibility@1.30.0",
         },
         {
             "generation_slot_id": intent["generation_slot_id"],
@@ -101,7 +186,7 @@ def test_compatibility_accepts_authorization_and_nullable_test_data_with_audit()
             "original_type": "null",
             "accepted_type": "null",
             "rule": "nullable_test_data_value",
-            "compatibility_version": "test-intent-compatibility@1.29.0",
+            "compatibility_version": "test-intent-compatibility@1.30.0",
         },
     ]
 
@@ -121,7 +206,7 @@ def test_functional_scenario_is_preserved_as_candidate_category() -> None:
             "original": "functional",
             "accepted_as": "functional",
             "rule": "functional_category_passthrough",
-            "compatibility_version": "test-intent-compatibility@1.29.0",
+            "compatibility_version": "test-intent-compatibility@1.30.0",
         }
     ]
 
@@ -152,7 +237,7 @@ def test_session_semantics_aliases_compile_to_anonymous_with_audit() -> None:
                 "original": alias,
                 "accepted_as": "anonymous",
                 "rule": "descriptive_session_to_canonical",
-                "compatibility_version": "test-intent-compatibility@1.29.0",
+                "compatibility_version": "test-intent-compatibility@1.30.0",
             }
         ]
 
@@ -362,7 +447,7 @@ def test_missing_cleanup_is_normalized_to_audited_no_cleanup() -> None:
             "original_type": "missing",
             "accepted_type": "no_cleanup",
             "rule": "missing_cleanup_to_no_cleanup",
-            "compatibility_version": "test-intent-compatibility@1.29.0",
+            "compatibility_version": "test-intent-compatibility@1.30.0",
         }
     ]
 
@@ -384,7 +469,7 @@ def test_quality_scenario_is_normalized_to_audited_functional() -> None:
             "original": "quality",
             "accepted_as": "functional",
             "rule": "model_functional_alias_to_functional",
-            "compatibility_version": "test-intent-compatibility@1.29.0",
+            "compatibility_version": "test-intent-compatibility@1.30.0",
         }
     ]
 
@@ -434,7 +519,7 @@ def test_model_functional_aliases_are_audited(alias: str) -> None:
             "original": alias,
             "accepted_as": "functional",
             "rule": "model_functional_alias_to_functional",
-            "compatibility_version": "test-intent-compatibility@1.29.0",
+            "compatibility_version": "test-intent-compatibility@1.30.0",
         }
     ]
 

@@ -42,7 +42,7 @@ class TestGenerationPromptRegistry:
             f"method={','.join(setup['properties']['method']['enum'])};"
             f"path_pattern={setup['properties']['path']['pattern']};"
             f"additionalProperties={str(setup['additionalProperties']).lower()};"
-            "non-HTTP=>string;path!=N/A."
+            "non-HTTP/config=>string;never type=config object;path!=N/A."
         )
 
     @property

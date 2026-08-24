@@ -87,16 +87,28 @@ def _error(database: PluginDatabase, run_id: str) -> str:
 
 
 def test_prompt_contract_and_examples_are_final_semantic_protocol() -> None:
-    reports = validate_test_intent_prompt_contract(
-        TestGenerationPromptRegistry(), TestIntentSchemas()
-    )
+    registry = TestGenerationPromptRegistry()
+    reports = validate_test_intent_prompt_contract(registry, TestIntentSchemas())
     assert TEST_GENERATION_PROMPT_VERSION == "test-generation@3.0.0"
     assert TEST_INTENT_SCHEMA_VERSION == "test-intent@2.9.0"
     assert TEST_CASE_SCHEMA_VERSION == "test-cases@1.8.0"
-    assert TEST_INTENT_COMPILER_VERSION == "deterministic-candidate-compiler@2.32.0"
+    assert TEST_INTENT_COMPILER_VERSION == "deterministic-candidate-compiler@2.33.0"
     assert set(reports) == {"api", "ui", "manual"}
     assert all(set(item["example"]) == INTENT_FIELDS for item in reports.values())
     assert all(not set(item["example"]) & FORBIDDEN_MODEL_FIELDS for item in reports.values())
+    messages = registry.generation_messages(
+        case_type="api",
+        batch_id="TGB-API-001",
+        generation_run_id="TGR-" + ("1" * 32),
+        provider_mode="real",
+        generation_slots=[],
+        max_cases=1,
+        recovery=True,
+        validation_error="INTENT_SCHEMA_VALIDATION",
+    )
+    contract = "\n".join(item["content"] for item in messages).casefold()
+    assert "non-http/config setup is a non-empty string" in contract
+    assert "never a type=config object" in contract
 
 
 def test_intent_schema_required_field_drift_breaks_prompt_contract() -> None:

@@ -1,5 +1,22 @@
 # Phase 13 End-to-End Results
 
+## Envelope recovery `E2E-20260824T152510Z`
+
+Recovery Run `TGR-BCDAE28E315D46058E5ED9C8D830D1C6` revalidated nine checkpoints and
+stopped at UI-002. Its initial HTTP 200 response used a JSON object where scalar `test_data.value`
+allows only a string or `null`. The one bounded correction also returned HTTP 200, but emitted four
+intents for three slots and repeated `GSL-UI-5CEAAD4B97E39AE2`; deterministic envelope validation
+rejected it as `GENERATION_SLOT_DUPLICATE`. The two calls used 2,672 input and 3,549 output tokens
+and cost US$0.004250. No Candidate collection was promoted.
+
+The correction contract now states the exact expected count and requires every ID already listed in
+the supplied immutable `slots_json` exactly once, with no missing, extra, or duplicate ID. The slot
+list remains present verbatim in the user message rather than duplicated in the system message, so
+the valid 44-slot/18-batch capacity plan and existing checkpoint boundaries remain unchanged.
+Saved invalid responses remain rejected. Read-only recovery planning still reuses API-001 through
+API-008 and UI-001, and schedules UI-002 through UI-006 plus four Manual batches: nine initial
+calls, at most eight corrections, and at most seventeen content calls.
+
 ## UI recovery `E2E-20260824T141003Z`
 
 Recovery Run `TGR-439D29BEC8684353823C26EF1B407569` reused API-001 through API-004,

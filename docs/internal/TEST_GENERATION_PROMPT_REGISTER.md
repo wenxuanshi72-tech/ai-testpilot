@@ -3,7 +3,7 @@
 ## Active contract
 
 - Prompt: `test-generation@3.0.0`
-- Prompt hash: `1864e3717b29f09001b68164f85a169a14b58a322c9ced33ce01fc5dac6bfecf`
+- Prompt hash: `2e3105ab92165c55cfa304a7663a9617766d78057b6a9819d171dfd75190b287`
 - Model-output Schema: `test-intent@2.9.0`
 - Intent Schema hash: `44058ea133f732a54a8c1b6e68dbbe84743cb473d613730fc558e3eb65efa657`
 - Candidate Schema: `test-cases@1.8.0`

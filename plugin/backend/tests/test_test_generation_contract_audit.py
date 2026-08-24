@@ -96,19 +96,57 @@ def test_prompt_contract_and_examples_are_final_semantic_protocol() -> None:
     assert set(reports) == {"api", "ui", "manual"}
     assert all(set(item["example"]) == INTENT_FIELDS for item in reports.values())
     assert all(not set(item["example"]) & FORBIDDEN_MODEL_FIELDS for item in reports.values())
+    allowed_ids = [
+        "GSL-UI-521B3F5DF70B43FD",
+        "GSL-UI-5CEAAD4B97E39AE2",
+        "GSL-UI-F3289D8BCBB25C45",
+    ]
     messages = registry.generation_messages(
         case_type="api",
         batch_id="TGB-API-001",
         generation_run_id="TGR-" + ("1" * 32),
         provider_mode="real",
-        generation_slots=[],
-        max_cases=1,
+        generation_slots=[{"generation_slot_id": slot_id} for slot_id in allowed_ids],
+        max_cases=3,
         recovery=True,
         validation_error="INTENT_SCHEMA_VALIDATION",
     )
     contract = "\n".join(item["content"] for item in messages).casefold()
     assert "non-http/config setup is a non-empty string" in contract
-    assert "never a type=config object" in contract
+    assert "never type=config object" in contract
+    assert "return exactly 3 intents" in contract
+    assert "no missing/extra/duplicate" in contract
+    assert all(slot_id.casefold() in contract for slot_id in allowed_ids)
+
+
+def test_real_ui002_corrected_duplicate_shape_remains_rejected(
+    formal_database: PluginDatabase,
+) -> None:
+    service = TestGenerationService(formal_database, max_retries=0)
+    _, _, payload = _batch_fixture(service)
+    payload["intents"].insert(2, json.loads(json.dumps(payload["intents"][1])))
+    run = _run_payload(formal_database, payload, "ui002-redacted-duplicate-regression")
+    assert _error(formal_database, run) == "GENERATION_SLOT_DUPLICATE"
+
+
+def test_real_ui002_initial_object_test_data_value_remains_schema_invalid(
+    formal_database: PluginDatabase,
+) -> None:
+    service = TestGenerationService(formal_database, max_retries=0)
+    _, _, payload = _batch_fixture(service)
+    payload["intents"][1]["test_data"] = [
+        {
+            "description": "Structured credentials returned in the scalar value field.",
+            "value": {
+                "username": "redacted-user",
+                "credential": "[REDACTED_SENSITIVE]",
+            },
+            "sensitive": True,
+            "classification": "credential",
+        }
+    ]
+    run = _run_payload(formal_database, payload, "ui002-redacted-object-value-regression")
+    assert _error(formal_database, run) == "INTENT_SCHEMA_VALIDATION"
 
 
 def test_intent_schema_required_field_drift_breaks_prompt_contract() -> None:

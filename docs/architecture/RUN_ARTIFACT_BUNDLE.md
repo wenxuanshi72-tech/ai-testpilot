@@ -1,6 +1,8 @@
 # Run Artifact Bundle Contract
 
-Status: design contract only; no new runtime Bundle is produced by this step.
+Status: runtime writer and standalone verifier implemented by authenticity hardening step 2.
+
+Implementation: `plugin/backend/app/run_artifact_bundles.py`.
 
 ## Layout
 
@@ -63,6 +65,19 @@ create <run-id>.staging
 On failure, no formal `completed` Bundle is created. Staging data is quarantined or removed according
 to policy and the execution becomes `ERROR`. A database commit and filesystem promotion must use a
 recoverable protocol so neither side can falsely claim completion alone.
+
+The step 2 implementation is deliberately filesystem-only: it does not mutate historical Runs or
+their database records. Callers create a writer, add already-redacted bytes or files, and finalize.
+Finalization writes canonical JSON, computes the Bundle digest with `bundle_hash` omitted, performs
+an independent full re-read, and uses a same-root atomic rename. Schema, member digest, size,
+duplicate ID/path, required evidence role, missing/extra file, traversal, absolute path and symlink
+checks all run before a Bundle becomes formal. A failure removes staging data and leaves no final
+directory. Database coordination remains an explicit integration responsibility for the later
+executor-integration step.
+
+`verify_run_artifact_bundle(path)` is the standalone verification entry. It depends only on the
+Bundle directory and the versioned schema, not on mutable database state. This makes a copied Bundle
+independently checkable while making no claim that hashes alone prove how the files were produced.
 
 ## Source and reproduction relationship
 

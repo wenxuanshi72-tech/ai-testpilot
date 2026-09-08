@@ -357,7 +357,13 @@ def test_ui_snapshot_execution_records_deterministic_verdict_and_artifacts(
         cast(Browser, _ExecutionBrowser()), row, "http://127.0.0.1:5173", tmp_path
     )
     result = staged["result"]
+    action_tape = staged["evidence"]["action_tape"]
     assert result["network_observations"][-1]["status"] == expected_status
     assert result["failure_type"] == failure_type
     assert Path(tmp_path / case_id / "final.png").is_file()
     assert Path(tmp_path / case_id / "trace.zip").is_file()
+    assert [event["action"] for event in action_tape["events"]][:-1] == [
+        action.split(":", 1)[0] for action in actions
+    ]
+    assert action_tape["events"][-1]["action"] == "assert"
+    assert "Test1234" not in str(action_tape)

@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 import plugin.backend.app.run_artifact_bundles as bundle_module
+from plugin.backend.app.action_tape import ActionTapeWriter
 from plugin.backend.app.run_artifact_bundles import (
     RunArtifactBundleError,
     RunArtifactBundleWriter,
@@ -190,6 +191,84 @@ def test_required_evidence_role_is_enforced(tmp_path: Path) -> None:
         writer.finalize()
     assert not writer.staging_dir.exists()
     assert not writer.final_dir.exists()
+
+
+def test_action_tape_is_validated_and_bound_to_bundle_records(tmp_path: Path) -> None:
+    fields = _fields()
+    fields["evidence_policy"]["action_tape_required"] = True  # type: ignore[index]
+    writer = RunArtifactBundleWriter(tmp_path, fields)
+    writer.start()
+    result_artifact_id = "ART-" + "D" * 32
+    writer.add_bytes(
+        "results/api-results.json",
+        b'{"status":"FAIL"}\n',
+        role="result",
+        mime_type="application/json",
+        source_record_ids=["APIRES-1"],
+        redaction_status="not_applicable",
+        artifact_id=result_artifact_id,
+    )
+    tape = ActionTapeWriter(
+        run_id=RUN_ID,
+        result_id="APIRES-1",
+        case_id="TC-API-AUTH-REG-005",
+        case_version=1,
+        snapshot_id="IES-" + "E" * 32,
+        executor="api",
+        clock=lambda: "2026-09-08T10:00:00Z",
+    )
+    tape.record(
+        phase="assertion",
+        action="assert",
+        resolved_target=None,
+        state_before_route=None,
+        state_after_route=None,
+        status="failed",
+        evidence_artifact_ids=[result_artifact_id],
+    )
+    writer.add_action_tape(
+        "action-tape/APIRES-1.ndjson",
+        tape.finalize(),
+        source_record_ids=["APIRES-1"],
+    )
+
+    manifest = writer.finalize()
+    assert {artifact["role"] for artifact in manifest["artifacts"]} == {
+        "action_tape",
+        "result",
+    }
+    assert verify_run_artifact_bundle(tmp_path / RUN_ID) == manifest
+
+
+def test_bundle_rejects_action_tape_with_missing_artifact_reference(tmp_path: Path) -> None:
+    fields = _fields()
+    fields["evidence_policy"]["action_tape_required"] = True  # type: ignore[index]
+    writer = RunArtifactBundleWriter(tmp_path, fields)
+    writer.start()
+    tape = ActionTapeWriter(
+        run_id=RUN_ID,
+        result_id="APIRES-1",
+        case_id="TC-API-AUTH-REG-005",
+        case_version=1,
+        snapshot_id="IES-" + "E" * 32,
+        executor="api",
+        clock=lambda: "2026-09-08T10:00:00Z",
+    )
+    tape.record(
+        phase="assertion",
+        action="assert",
+        resolved_target=None,
+        state_before_route=None,
+        state_after_route=None,
+        evidence_artifact_ids=["ART-" + "F" * 32],
+    )
+    writer.add_action_tape(
+        "action-tape/APIRES-1.ndjson",
+        tape.finalize(),
+        source_record_ids=["APIRES-1"],
+    )
+    with pytest.raises(RunArtifactBundleError, match="ACTION_TAPE_REFERENCE_MISSING"):
+        writer.finalize()
 
 
 def test_schema_failure_cleans_staging_without_formal_bundle(tmp_path: Path) -> None:

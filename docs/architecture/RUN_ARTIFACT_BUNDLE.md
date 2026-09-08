@@ -1,6 +1,7 @@
 # Run Artifact Bundle Contract
 
-Status: runtime writer and standalone verifier implemented by authenticity hardening step 2.
+Status: runtime writer and standalone verifier implemented by authenticity hardening step 2;
+Action Tape member validation added by step 3.
 
 Implementation: `plugin/backend/app/run_artifact_bundles.py`.
 
@@ -78,6 +79,11 @@ executor-integration step.
 `verify_run_artifact_bundle(path)` is the standalone verification entry. It depends only on the
 Bundle directory and the versioned schema, not on mutable database state. This makes a copied Bundle
 independently checkable while making no claim that hashes alone prove how the files were produced.
+
+Step 3 adds `RunArtifactBundleWriter.add_action_tape`. It accepts only canonical, schema-valid
+Action Tape NDJSON owned by the Bundle Run. Standalone verification revalidates every Action Tape,
+requires its Result ownership to resolve in `result_ids`, and rejects references to Artifact IDs
+that are absent from the manifest.
 
 ## Source and reproduction relationship
 

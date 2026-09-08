@@ -9,6 +9,11 @@ from typing import Any, cast
 
 from jsonschema import Draft202012Validator, FormatChecker
 
+from plugin.backend.app.action_tape import (
+    ACTION_TAPE_MEDIA_TYPE,
+    ActionTapeError,
+    validate_action_tape,
+)
 from plugin.backend.app.database import PROJECT_ROOT
 from plugin.backend.app.ids import new_id
 
@@ -114,6 +119,7 @@ def verify_run_artifact_bundle(bundle_dir: Path) -> dict[str, Any]:
     if actual_files != expected_files:
         raise RunArtifactBundleError("BUNDLE_FILE_SET_MISMATCH")
 
+    artifact_ids = set(ids)
     for artifact in artifacts:
         path = _contained_path(bundle_dir, artifact["relative_path"], must_exist=True)
         if not path.is_file():
@@ -125,6 +131,18 @@ def verify_run_artifact_bundle(bundle_dir: Path) -> dict[str, Any]:
             raise RunArtifactBundleError("BUNDLE_ARTIFACT_SIZE_MISMATCH")
         if _sha256(content) != artifact["sha256"]:
             raise RunArtifactBundleError("BUNDLE_ARTIFACT_HASH_MISMATCH")
+        if artifact["role"] == "action_tape":
+            try:
+                events = validate_action_tape(content, expected_run_id=manifest["run_id"])
+            except ActionTapeError as error:
+                raise RunArtifactBundleError(f"BUNDLE_ACTION_TAPE_INVALID:{error}") from error
+            if any(event["result_id"] not in manifest["result_ids"] for event in events):
+                raise RunArtifactBundleError("BUNDLE_ACTION_TAPE_RESULT_MISMATCH")
+            references = {
+                reference for event in events for reference in event["evidence_artifact_ids"]
+            }
+            if not references.issubset(artifact_ids):
+                raise RunArtifactBundleError("BUNDLE_ACTION_TAPE_REFERENCE_MISSING")
 
     roles = {item["role"] for item in artifacts}
     for policy_name, role in _REQUIRED_ROLE_BY_POLICY.items():
@@ -194,6 +212,28 @@ class RunArtifactBundleWriter:
         if source.is_symlink() or not source.is_file():
             raise RunArtifactBundleError("BUNDLE_SOURCE_FILE_INVALID")
         return self.add_bytes(relative_path, source.read_bytes(), **metadata)
+
+    def add_action_tape(
+        self,
+        relative_path: str,
+        content: bytes,
+        *,
+        source_record_ids: list[str],
+        artifact_id: str | None = None,
+    ) -> dict[str, Any]:
+        try:
+            validate_action_tape(content, expected_run_id=self.run_id)
+        except ActionTapeError as error:
+            raise RunArtifactBundleError(f"BUNDLE_ACTION_TAPE_INVALID:{error}") from error
+        return self.add_bytes(
+            relative_path,
+            content,
+            role="action_tape",
+            mime_type=ACTION_TAPE_MEDIA_TYPE,
+            source_record_ids=source_record_ids,
+            redaction_status="verified",
+            artifact_id=artifact_id,
+        )
 
     def finalize(self) -> dict[str, Any]:
         if not self._started:

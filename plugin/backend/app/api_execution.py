@@ -22,6 +22,12 @@ from sut.backend.app.extensions import db as sut_db
 from sut.backend.app.models import User, UserSession
 from sut.backend.app.time import utc_now
 
+from plugin.backend.app.action_tape import (
+    ACTION_TAPE_MEDIA_TYPE,
+    ACTION_TAPE_WRITER_VERSION,
+    ActionTapeWriter,
+    action_tape_sha256,
+)
 from plugin.backend.app.database import PROJECT_ROOT, PluginDatabase
 from plugin.backend.app.ids import new_id
 from plugin.backend.app.test_review import _hash
@@ -169,11 +175,11 @@ class ApiExecutionService:
         snapshots = self._api_snapshots(baseline_id)
         if not snapshots:
             raise ApiExecutionError("BASELINE_HAS_NO_API_SNAPSHOTS")
+        run_id = new_id("RUN")
         started_at = _utc_timestamp()
-        staged = [self._execute_snapshot(row) for row in snapshots]
+        staged = [self._execute_snapshot(row, run_id) for row in snapshots]
         completed_at = _utc_timestamp()
         counts = Counter(item["status"] for item in staged)
-        run_id = new_id("RUN")
         with self.database.transaction() as connection:
             connection.execute(
                 text(
@@ -301,12 +307,21 @@ class ApiExecutionService:
                 result.append({**row, "snapshot": snapshot})
         return result
 
-    def _execute_snapshot(self, row: dict[str, Any]) -> dict[str, Any]:
+    def _execute_snapshot(self, row: dict[str, Any], run_id: str | None = None) -> dict[str, Any]:
         snapshot = cast(dict[str, Any], row["snapshot"])
         candidate = cast(dict[str, Any], snapshot["case"])
         case_id = str(candidate["case_id"])
+        run_id = run_id or new_id("RUN")
         result_id = new_id("RES")
         evidence_id = new_id("EVD")
+        tape = ActionTapeWriter(
+            run_id=run_id,
+            result_id=result_id,
+            case_id=case_id,
+            case_version=int(snapshot["case_version"]),
+            snapshot_id=str(row["immutable_execution_snapshot_id"]),
+            executor="api",
+        )
         started = time.perf_counter()
         exchanges: list[dict[str, Any]] = []
         expected_status = int(candidate["type_details"]["expected_status"])
@@ -325,11 +340,35 @@ class ApiExecutionService:
                     body = _resolve(setup.get("request_body"), variables)
                     body, applied = _adapt_sut_request(str(setup["path"]), body)
                     transformations.extend(applied)
-                    response = runtime.request(
-                        str(setup["method"]),
-                        str(setup["path"]),
-                        headers={},
-                        body=body,
+                    sensitivity, display = _action_value_metadata(body, sensitive_values)
+                    value_source = f"frozen_snapshot.setup_requests[{index}].request_body"
+                    try:
+                        response = runtime.request(
+                            str(setup["method"]),
+                            str(setup["path"]),
+                            headers={},
+                            body=body,
+                        )
+                    except Exception:
+                        _record_http_action(
+                            tape,
+                            phase="setup",
+                            method=str(setup["method"]),
+                            path=str(setup["path"]),
+                            value_source=value_source,
+                            value_sensitivity=sensitivity,
+                            value_display=display,
+                            status="error",
+                        )
+                        raise
+                    _record_http_action(
+                        tape,
+                        phase="setup",
+                        method=str(setup["method"]),
+                        path=str(setup["path"]),
+                        value_source=value_source,
+                        value_sensitivity=sensitivity,
+                        value_display=display,
                     )
                     exchanges.append(
                         _exchange(
@@ -357,6 +396,16 @@ class ApiExecutionService:
                 else:
                     if details.get("session_handling") == "expired_session":
                         runtime.expire_current_session()
+                        tape.record(
+                            phase="setup",
+                            action="fixture",
+                            resolved_target=None,
+                            state_before_route=None,
+                            state_after_route=None,
+                            value_source="frozen_snapshot.session_handling",
+                            value_sensitivity="non_sensitive",
+                            value_display="expired_session",
+                        )
                     request_body = _resolve(details["request"].get("body"), variables)
                     request_body, applied = _adapt_sut_request(str(details["path"]), request_body)
                     transformations.extend(applied)
@@ -366,11 +415,34 @@ class ApiExecutionService:
                         else ""
                     )
                     before_count = runtime.user_count(username) if username else 0
-                    response = runtime.request(
-                        str(details["method"]),
-                        str(details["path"]),
-                        headers=cast(dict[str, str], details.get("headers", {})),
-                        body=request_body,
+                    sensitivity, display = _action_value_metadata(request_body, sensitive_values)
+                    try:
+                        response = runtime.request(
+                            str(details["method"]),
+                            str(details["path"]),
+                            headers=cast(dict[str, str], details.get("headers", {})),
+                            body=request_body,
+                        )
+                    except Exception:
+                        _record_http_action(
+                            tape,
+                            phase="test",
+                            method=str(details["method"]),
+                            path=str(details["path"]),
+                            value_source="frozen_snapshot.request.body",
+                            value_sensitivity=sensitivity,
+                            value_display=display,
+                            status="error",
+                        )
+                        raise
+                    _record_http_action(
+                        tape,
+                        phase="test",
+                        method=str(details["method"]),
+                        path=str(details["path"]),
+                        value_source="frozen_snapshot.request.body",
+                        value_sensitivity=sensitivity,
+                        value_display=display,
                     )
                     actual_status = response.status_code
                     exchanges.append(
@@ -421,6 +493,17 @@ class ApiExecutionService:
             status = "ERROR"
             failure_type = f"executor_{type(error).__name__}"
             assertions.append(_assertion("executor_completed", True, False))
+        tape.record(
+            phase="assertion",
+            action="assert",
+            resolved_target=None,
+            state_before_route=None,
+            state_after_route=None,
+            status={"PASS": "completed", "FAIL": "failed", "BLOCKED": "blocked"}.get(
+                status, "error"
+            ),
+        )
+        action_tape = tape.finalize()
         duration_ms = max(0, round((time.perf_counter() - started) * 1000))
         evidence = {
             "schema_version": "api-execution-evidence@1.0.0",
@@ -428,6 +511,12 @@ class ApiExecutionService:
             "snapshot_id": row["immutable_execution_snapshot_id"],
             "exchanges": exchanges,
             "adapter_transformations": transformations,
+            "action_tape": {
+                "writer_version": ACTION_TAPE_WRITER_VERSION,
+                "media_type": ACTION_TAPE_MEDIA_TYPE,
+                "sha256": action_tape_sha256(action_tape),
+                "events": tape.events(),
+            },
             "redaction_applied": True,
         }
         evidence_hash = hashlib.sha256(_canonical(evidence).encode("utf-8")).hexdigest()
@@ -460,6 +549,49 @@ class ApiExecutionService:
 
 def _variables(candidate: dict[str, Any]) -> dict[str, Any]:
     return {str(item["name"]): item.get("value") for item in candidate.get("test_data", [])}
+
+
+def _http_target(method: str, path: str) -> dict[str, Any]:
+    return {
+        "strategy": "http",
+        "role": None,
+        "name": None,
+        "path": path,
+        "method": method,
+    }
+
+
+def _record_http_action(
+    tape: ActionTapeWriter,
+    *,
+    phase: str,
+    method: str,
+    path: str,
+    value_source: str,
+    value_sensitivity: str,
+    value_display: str | None,
+    status: str = "completed",
+) -> None:
+    tape.record(
+        phase=phase,
+        action="http_request",
+        resolved_target=_http_target(method, path),
+        state_before_route=None,
+        state_after_route=None,
+        value_source=value_source,
+        value_sensitivity=value_sensitivity,
+        value_display=value_display,
+        status=status,
+    )
+
+
+def _action_value_metadata(body: Any, sensitive_values: set[str]) -> tuple[str, str | None]:
+    if body is None:
+        return "not_applicable", None
+    serialized = _canonical(body)
+    if any(value and value in serialized for value in sensitive_values):
+        return "sensitive", "[REDACTED]"
+    return "non_sensitive", "[STRUCTURED_VALUE]"
 
 
 def _resolve(value: Any, variables: Mapping[str, Any]) -> Any:

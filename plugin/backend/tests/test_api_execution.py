@@ -97,6 +97,10 @@ def test_api_executor_runs_frozen_api_subset_after_seeded_bug_fix(
     assert "password_hash" not in serialized
     assert "authorization" not in serialized
     assert all(row["redaction_applied"] == 1 for row in evidence_rows)
+    tapes = [json.loads(str(row["evidence_json"]))["action_tape"] for row in evidence_rows]
+    assert all(tape["writer_version"] == "action-tape-writer@1.0.0" for tape in tapes)
+    assert all(tape["events"][-1]["action"] == "assert" for tape in tapes)
+    assert all(event["run_id"] == result.run_id for tape in tapes for event in tape["events"])
 
 
 def test_api_executor_enforces_baseline_and_snapshot_integrity(

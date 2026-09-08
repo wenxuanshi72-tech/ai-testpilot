@@ -11,6 +11,7 @@ The authenticity contracts introduced after Phase 13 are:
 - `run-bundles/v1/run_manifest.schema.json` (`run-manifest@1.0.0`)
 - `action-tape/v1/action_tape_event.schema.json` (`action-tape-event@1.0.0`)
 - `reproduction/v1/reproduction_result.schema.json` (`reproduction-result@1.0.0`)
+- `evidence/v2/ui_execution_evidence.schema.json` (`ui-execution-evidence@2.0.0`)
 
 These Schemas define data eligibility but do not themselves prove runtime implementation. Cross-file
 rules such as unique Artifact paths, complete evidence-role coverage, canonical bundle hashing and

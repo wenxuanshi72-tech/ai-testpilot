@@ -1,20 +1,29 @@
 from __future__ import annotations
 
 import hashlib
+import json
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, cast
 
 import pytest
+from jsonschema import Draft202012Validator
 from playwright.sync_api import Browser
 from sqlalchemy.exc import IntegrityError
 
-from plugin.backend.app.database import PluginDatabase
+from plugin.backend.app.database import PROJECT_ROOT, PluginDatabase
 from plugin.backend.app.ids import new_id
+from plugin.backend.app.run_artifact_bundles import (
+    RunArtifactBundleWriter,
+    verify_run_artifact_bundle,
+)
 from plugin.backend.app.ui_execution import (
     UiExecutionError,
     UiExecutionService,
     _expected_route,
     _parse_action,
+    _record_console,
+    _record_page_error,
     _ui_values,
 )
 from plugin.backend.tests.test_api_execution import _frozen_api_baseline
@@ -29,6 +38,57 @@ def formal_database(database: PluginDatabase) -> PluginDatabase:
 
 def _case(case_id: str, test_data: list[dict[str, Any]]) -> dict[str, Any]:
     return {"case_id": case_id, "test_data": test_data}
+
+
+def _bundle_fields(evidence: dict[str, Any], result_id: str) -> dict[str, Any]:
+    return {
+        "run_id": evidence["run_id"],
+        "project_id": "PRJ-PORTFOLIO",
+        "environment_id": "local-test",
+        "source_commit": "1" * 40,
+        "frozen_baseline_id": "FBL-" + "B" * 32,
+        "executor": "ui",
+        "protocol_version": "test-executor@1.0.0",
+        "started_at": "2026-09-08T10:00:00Z",
+        "completed_at": "2026-09-08T10:01:00Z",
+        "finalization_status": "completed",
+        "trust_state": "executed",
+        "trust_evaluation": {
+            "policy_version": "evidence-trust-policy@1.0.0",
+            "determined_by": "deterministic_trust_evaluator",
+            "verifier_version": "run-bundle-verifier@1.0.0",
+            "reproduction_result_id": None,
+        },
+        "provenance": {
+            "producer": "deterministic_executor",
+            "producer_version": "ui-executor@1.0.0",
+            "operating_system": "test-double",
+            "python_version": "3.11.9",
+            "node_version": None,
+            "playwright_version": "test-double",
+            "browser_name": evidence["browser"]["engine"],
+            "browser_version": evidence["browser"]["version"],
+        },
+        "source_run": None,
+        "result_ids": [result_id],
+        "evidence_policy": {
+            "action_tape_required": True,
+            "trace_required": True,
+            "screenshot_required": True,
+            "network_required": True,
+            "console_required": True,
+            "redaction_verified": True,
+        },
+    }
+
+
+def test_ui_evidence_v2_schema_is_valid() -> None:
+    schema = json.loads(
+        (
+            PROJECT_ROOT / "schemas" / "evidence" / "v2" / "ui_execution_evidence.schema.json"
+        ).read_text(encoding="utf-8")
+    )
+    Draft202012Validator.check_schema(schema)
 
 
 def test_action_protocol_accepts_only_stable_bounded_locators() -> None:
@@ -96,6 +156,27 @@ def test_expected_routes_are_explicit() -> None:
     assert _expected_route("TC-UI-REQ-REG-002") == "/profile"
 
 
+def test_console_and_page_errors_are_bounded_and_redacted() -> None:
+    console: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
+    message = type("Message", (), {"type": "error", "text": "password=Test1234"})()
+    error = type(
+        "PageError",
+        (),
+        {"name": "TypeError", "message": "token:secret-token Test1234"},
+    )()
+
+    _record_console(message, console, {"Test1234"})
+    _record_page_error(error, errors, {"Test1234"})
+
+    serialized = str({"console": console, "errors": errors})
+    assert "Test1234" not in serialized
+    assert "secret-token" not in serialized
+    assert "[REDACTED]" in serialized
+    assert console[0]["sequence"] == 1
+    assert errors[0]["sequence"] == 1
+
+
 def test_ui_service_rejects_non_local_targets(database: Any) -> None:
     service = UiExecutionService(database)
     with pytest.raises(UiExecutionError, match="SUT_UI_BASE_URL_NOT_LOCAL"):
@@ -112,7 +193,10 @@ class _FakeBrowser:
 
 
 class _FakeTracing:
-    def start(self, **_kwargs: Any) -> None:
+    start_options: list[dict[str, Any]] = []
+
+    def start(self, **kwargs: Any) -> None:
+        self.start_options.append(kwargs)
         return None
 
     def stop(self, *, path: str) -> None:
@@ -152,10 +236,10 @@ class _FakePage:
         self.base_url = base_url
         self.url = base_url
         self.values: dict[str, str] = {}
-        self._response_listener: Any = None
+        self._listeners: dict[str, Any] = {}
 
-    def on(self, _event: str, callback: Any) -> None:
-        self._response_listener = callback
+    def on(self, event: str, callback: Any) -> None:
+        self._listeners[event] = callback
 
     def goto(self, route: str, **_kwargs: Any) -> None:
         self.url = self.base_url + route
@@ -186,7 +270,11 @@ class _FakePage:
         else:
             path, status = "/api/auth/register", 201
             self.url = self.base_url + "/profile"
-        self._response_listener(_FakeResponse(path, status))
+        password = self.values.get("Password", "")
+        self._listeners["console"](
+            type("Message", (), {"type": "debug", "text": f"password={password}"})()
+        )
+        self._listeners["response"](_FakeResponse(path, status))
 
 
 class _FakeContext:
@@ -280,6 +368,31 @@ def test_ui_service_atomically_persists_results_and_evidence(
         )
 
 
+def test_ui_service_removes_uncommitted_evidence_after_executor_failure(
+    formal_database: PluginDatabase,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    baseline_id = _frozen_api_baseline(formal_database)
+    evidence_root = tmp_path / "evidence"
+    service = UiExecutionService(formal_database, evidence_root=evidence_root)
+    monkeypatch.setattr("plugin.backend.app.ui_execution.sync_playwright", _FakePlaywright)
+
+    def fail(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        raise UiExecutionError("EVIDENCE_FINALIZATION_FAILED")
+
+    monkeypatch.setattr(service, "_execute_snapshot", fail)
+    with pytest.raises(UiExecutionError, match="BROWSER_EXECUTION_FAILED:UiExecutionError"):
+        service.execute(
+            baseline_id,
+            environment_id="local-test",
+            base_url="http://127.0.0.1:5173",
+        )
+
+    assert not list(evidence_root.glob("UIR-*"))
+    assert formal_database.fetch_one("SELECT COUNT(*) AS count FROM ui_test_runs") == {"count": 0}
+
+
 @pytest.mark.parametrize(
     ("case_id", "actions", "test_data", "expected_status", "failure_type"),
     [
@@ -339,6 +452,7 @@ def test_ui_snapshot_execution_records_deterministic_verdict_and_artifacts(
     failure_type: str | None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _FakeTracing.start_options.clear()
     monkeypatch.setattr("plugin.backend.app.ui_execution._relative", lambda path: path.name)
     service = UiExecutionService(database, evidence_root=tmp_path)
     row = {
@@ -357,13 +471,64 @@ def test_ui_snapshot_execution_records_deterministic_verdict_and_artifacts(
         cast(Browser, _ExecutionBrowser()), row, "http://127.0.0.1:5173", tmp_path
     )
     result = staged["result"]
-    action_tape = staged["evidence"]["action_tape"]
+    evidence = staged["evidence"]
+    action_tape = evidence["action_tape"]
     assert result["network_observations"][-1]["status"] == expected_status
     assert result["failure_type"] == failure_type
     assert Path(tmp_path / case_id / "final.png").is_file()
     assert Path(tmp_path / case_id / "trace.zip").is_file()
+    assert Path(tmp_path / case_id / "network.json").is_file()
+    assert Path(tmp_path / case_id / "console.json").is_file()
+    assert evidence["schema_version"] == "ui-execution-evidence@2.0.0"
+    assert evidence["trace"]["snapshots"] is True
+    assert evidence["trace"]["sensitive_input_actions_excluded"] is True
+    assert evidence["viewport"] == {"width": 1440, "height": 900, "device_scale_factor": 1}
+    assert evidence["console"]["capture_enabled"] is True
+    assert evidence["console"]["entries"]
+    assert all(options["snapshots"] is True for options in _FakeTracing.start_options)
     assert [event["action"] for event in action_tape["events"]][:-1] == [
         action.split(":", 1)[0] for action in actions
     ]
     assert action_tape["events"][-1]["action"] == "assert"
+    assert set(action_tape["events"][-1]["evidence_artifact_ids"]) == {
+        evidence[role]["artifact_id"] for role in ("screenshot", "trace", "network", "console")
+    }
     assert "Test1234" not in str(action_tape)
+    assert "Test1234" not in str(evidence["console"])
+    assert "Password123!" not in str(evidence["console"])
+    invalid_evidence = deepcopy(evidence)
+    invalid_evidence["trace"]["unexpected"] = True
+    assert list(service.evidence_validator.iter_errors(invalid_evidence))
+
+    bundle_root = tmp_path / "bundles"
+    writer = RunArtifactBundleWriter(bundle_root, _bundle_fields(evidence, staged["result_id"]))
+    writer.start()
+    for role, filename, mime_type in (
+        ("screenshot", "final.png", "image/png"),
+        ("trace", "trace.zip", "application/zip"),
+        ("network", "network.json", "application/json"),
+        ("console", "console.json", "application/json"),
+    ):
+        writer.add_file(
+            tmp_path / case_id / filename,
+            f"evidence/ui/{staged['result_id']}/{filename}",
+            role=role,
+            mime_type=mime_type,
+            source_record_ids=[staged["result_id"]],
+            redaction_status="verified",
+            artifact_id=evidence[role]["artifact_id"],
+        )
+    tape_content = (
+        b"\n".join(
+            json.dumps(event, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+            for event in action_tape["events"]
+        )
+        + b"\n"
+    )
+    writer.add_action_tape(
+        f"action-tape/{staged['result_id']}.ndjson",
+        tape_content,
+        source_record_ids=[staged["result_id"]],
+    )
+    manifest = writer.finalize()
+    assert verify_run_artifact_bundle(bundle_root / evidence["run_id"]) == manifest

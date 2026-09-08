@@ -13,6 +13,12 @@ from jsonschema import Draft202012Validator
 from playwright.sync_api import Browser, Page, Response, sync_playwright
 from sqlalchemy import text
 
+from plugin.backend.app.action_tape import (
+    ACTION_TAPE_MEDIA_TYPE,
+    ACTION_TAPE_WRITER_VERSION,
+    ActionTapeWriter,
+    action_tape_sha256,
+)
 from plugin.backend.app.api_execution import (
     SUPPORTED_CONTRACT,
     SUPPORTED_SNAPSHOT_SCHEMA,
@@ -234,6 +240,15 @@ class UiExecutionService:
         expected_route = _expected_route(case_id)
         result_id = new_id("UIRES")
         evidence_id = new_id("EVD")
+        run_id = run_dir.name if re.fullmatch(r"UIR-[A-F0-9]{32}", run_dir.name) else new_id("UIR")
+        tape = ActionTapeWriter(
+            run_id=run_id,
+            result_id=result_id,
+            case_id=case_id,
+            case_version=int(snapshot["case_version"]),
+            snapshot_id=str(row["immutable_execution_snapshot_id"]),
+            executor="ui",
+        )
         case_dir = run_dir / case_id
         case_dir.mkdir(parents=True, exist_ok=False)
         screenshot_path = case_dir / "final.png"
@@ -252,17 +267,49 @@ class UiExecutionService:
             values, adapter_audit = _ui_values(case)
             for action in details["user_actions"]:
                 verb, strategy, value = _parse_action(str(action))
-                if verb == "goto":
-                    page.goto(value, wait_until="networkidle")
-                elif verb == "fill":
-                    _locator(page, strategy, value).fill(values[value])
-                elif verb == "click":
-                    if not tracing_started:
-                        context.tracing.start(screenshots=True, snapshots=False, sources=False)
-                        tracing_started = True
-                    _locator(page, strategy, value).click()
-                    page.wait_for_load_state("networkidle")
-                    page.wait_for_timeout(500)
+                before_route = urlparse(page.url).path or "/"
+                sensitivity = (
+                    "sensitive"
+                    if verb == "fill" and "password" in value.casefold()
+                    else ("non_sensitive" if verb == "fill" else "not_applicable")
+                )
+                value_source = f"frozen_snapshot.test_data:{value}" if verb == "fill" else None
+                value_display = values.get(value) if sensitivity == "non_sensitive" else None
+                try:
+                    if verb == "goto":
+                        page.goto(value, wait_until="networkidle")
+                    elif verb == "fill":
+                        _locator(page, strategy, value).fill(values[value])
+                    elif verb == "click":
+                        if not tracing_started:
+                            context.tracing.start(screenshots=True, snapshots=False, sources=False)
+                            tracing_started = True
+                        _locator(page, strategy, value).click()
+                        page.wait_for_load_state("networkidle")
+                        page.wait_for_timeout(500)
+                except Exception:
+                    tape.record(
+                        phase="test",
+                        action=verb,
+                        resolved_target=_ui_target(verb, strategy, value),
+                        state_before_route=before_route,
+                        state_after_route=urlparse(page.url).path or "/",
+                        status="error",
+                        value_source=value_source,
+                        value_sensitivity=sensitivity,
+                        value_display=value_display,
+                    )
+                    raise
+                tape.record(
+                    phase="test",
+                    action=verb,
+                    resolved_target=_ui_target(verb, strategy, value),
+                    state_before_route=before_route,
+                    state_after_route=urlparse(page.url).path or "/",
+                    value_source=value_source,
+                    value_sensitivity=sensitivity,
+                    value_display=value_display,
+                )
             actual_route = urlparse(page.url).path
             assertions.extend(_case_assertions(case_id, page, actual_route, network))
             status = "PASS" if all(item["passed"] for item in assertions) else "FAIL"
@@ -281,6 +328,15 @@ class UiExecutionService:
                 context.tracing.start(screenshots=False, snapshots=False, sources=False)
             context.tracing.stop(path=str(trace_path))
             context.close()
+        tape.record(
+            phase="assertion",
+            action="assert",
+            resolved_target=None,
+            state_before_route=actual_route or "/",
+            state_after_route=actual_route or "/",
+            status={"PASS": "completed", "FAIL": "failed"}.get(status, "error"),
+        )
+        action_tape = tape.finalize()
         duration_ms = max(0, round((time.perf_counter() - started) * 1000))
         screenshot_hash = _file_hash(screenshot_path)
         trace_hash = _file_hash(trace_path)
@@ -294,6 +350,12 @@ class UiExecutionService:
             "trace_hash": trace_hash,
             "network_observations": network,
             "adapter_transformations": adapter_audit,
+            "action_tape": {
+                "writer_version": ACTION_TAPE_WRITER_VERSION,
+                "media_type": ACTION_TAPE_MEDIA_TYPE,
+                "sha256": action_tape_sha256(action_tape),
+                "events": tape.events(),
+            },
             "redaction_applied": True,
         }
         evidence_hash = hashlib.sha256(_canonical(evidence).encode("utf-8")).hexdigest()
@@ -345,6 +407,24 @@ def _locator(page: Page, strategy: str, value: str) -> Any:
     if strategy == "role":
         return page.get_by_role("button", name=value, exact=True)
     raise UiExecutionError("UI_LOCATOR_UNSUPPORTED")
+
+
+def _ui_target(verb: str, strategy: str, value: str) -> dict[str, Any]:
+    if verb == "goto":
+        return {
+            "strategy": "route",
+            "role": None,
+            "name": None,
+            "path": value,
+            "method": None,
+        }
+    return {
+        "strategy": strategy,
+        "role": "button" if strategy == "role" else None,
+        "name": value,
+        "path": None,
+        "method": None,
+    }
 
 
 def _ui_values(case: dict[str, Any]) -> tuple[dict[str, str], list[dict[str, str]]]:

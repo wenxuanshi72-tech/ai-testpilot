@@ -3,14 +3,15 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import shutil
 import time
 from collections import Counter
 from pathlib import Path
 from typing import Any, cast
 from urllib.parse import urlparse
 
-from jsonschema import Draft202012Validator
-from playwright.sync_api import Browser, Page, Response, sync_playwright
+from jsonschema import Draft202012Validator, FormatChecker
+from playwright.sync_api import Browser, Page, Response, ViewportSize, sync_playwright
 from sqlalchemy import text
 
 from plugin.backend.app.action_tape import (
@@ -32,7 +33,9 @@ from plugin.backend.app.test_review import _hash
 
 UI_EXECUTOR_VERSION = "ui-executor@1.0.0"
 UI_RESULT_SCHEMA_VERSION = "ui-execution-result@1.0.0"
+UI_EVIDENCE_SCHEMA_VERSION = "ui-execution-evidence@2.0.0"
 LOCAL_BASE_URL = re.compile(r"^http://(127\.0\.0\.1|localhost):\d{2,5}$")
+VIEWPORT: ViewportSize = {"width": 1440, "height": 900}
 
 
 class UiExecutionError(Exception):
@@ -53,6 +56,14 @@ class UiExecutionService:
         self.result_validator = Draft202012Validator(
             json.loads(schema_path.read_text(encoding="utf-8"))
         )
+        evidence_schema_path = (
+            PROJECT_ROOT / "schemas" / "evidence" / "v2" / "ui_execution_evidence.schema.json"
+        )
+        self.evidence_validator = Draft202012Validator(
+            json.loads(evidence_schema_path.read_text(encoding="utf-8")),
+            format_checker=FormatChecker(),
+        )
+        self._browser_channel = "unspecified"
 
     def execute(
         self,
@@ -81,6 +92,7 @@ class UiExecutionService:
         run_dir = self.evidence_root / run_id
         run_dir.mkdir(parents=True, exist_ok=False)
         started_at = _utc_timestamp()
+        self._browser_channel = browser_channel
         try:
             with sync_playwright() as playwright:
                 browser = playwright.chromium.launch(channel=browser_channel, headless=True)
@@ -91,6 +103,8 @@ class UiExecutionService:
                 finally:
                     browser.close()
         except Exception as error:
+            if run_dir.is_dir():
+                shutil.rmtree(run_dir)
             raise UiExecutionError(f"BROWSER_EXECUTION_FAILED:{type(error).__name__}") from error
         completed_at = _utc_timestamp()
         counts = Counter(item["status"] for item in staged)
@@ -144,6 +158,8 @@ class UiExecutionService:
                     },
                 )
                 evidence = item["evidence"]
+                screenshot = evidence.get("screenshot", {})
+                trace = evidence.get("trace", {})
                 connection.execute(
                     text(
                         "INSERT INTO ui_test_evidence(ui_test_evidence_id,ui_test_result_id,"
@@ -157,10 +173,11 @@ class UiExecutionService:
                         "result": item["result_id"],
                         "payload": _canonical(evidence),
                         "hash": result["evidence_hash"],
-                        "screenshot": evidence["screenshot_path"],
-                        "screenshot_hash": evidence["screenshot_hash"],
-                        "trace": evidence["trace_path"],
-                        "trace_hash": evidence["trace_hash"],
+                        "screenshot": evidence.get("screenshot_path")
+                        or screenshot["relative_path"],
+                        "screenshot_hash": evidence.get("screenshot_hash") or screenshot["sha256"],
+                        "trace": evidence.get("trace_path") or trace["relative_path"],
+                        "trace_hash": evidence.get("trace_hash") or trace["sha256"],
                     },
                 )
         return {
@@ -253,18 +270,38 @@ class UiExecutionService:
         case_dir.mkdir(parents=True, exist_ok=False)
         screenshot_path = case_dir / "final.png"
         trace_path = case_dir / "trace.zip"
+        network_path = case_dir / "network.json"
+        console_path = case_dir / "console.json"
+        artifact_ids = {
+            "screenshot": new_id("ART"),
+            "trace": new_id("ART"),
+            "network": new_id("ART"),
+            "console": new_id("ART"),
+        }
         started = time.perf_counter()
-        context = browser.new_context(base_url=base_url, viewport={"width": 1440, "height": 900})
+        context = browser.new_context(base_url=base_url, viewport=VIEWPORT)
         page = context.new_page()
         network: list[dict[str, Any]] = []
         page.on("response", lambda response: _record_network(response, network))
+        console_entries: list[dict[str, Any]] = []
+        page_errors: list[dict[str, Any]] = []
         assertions: list[dict[str, Any]] = []
-        adapter_audit: list[dict[str, str]] = []
+        values, adapter_audit = _ui_values(case)
+        sensitive_values = {
+            field_value for label, field_value in values.items() if "password" in label.casefold()
+        }
+        page.on(
+            "console",
+            lambda message: _record_console(message, console_entries, sensitive_values),
+        )
+        page.on(
+            "pageerror",
+            lambda error: _record_page_error(error, page_errors, sensitive_values),
+        )
         actual_route: str | None = None
         tracing_started = False
         try:
             details = cast(dict[str, Any], case["type_details"])
-            values, adapter_audit = _ui_values(case)
             for action in details["user_actions"]:
                 verb, strategy, value = _parse_action(str(action))
                 before_route = urlparse(page.url).path or "/"
@@ -282,7 +319,7 @@ class UiExecutionService:
                         _locator(page, strategy, value).fill(values[value])
                     elif verb == "click":
                         if not tracing_started:
-                            context.tracing.start(screenshots=True, snapshots=False, sources=False)
+                            context.tracing.start(screenshots=True, snapshots=True, sources=False)
                             tracing_started = True
                         _locator(page, strategy, value).click()
                         page.wait_for_load_state("networkidle")
@@ -298,6 +335,7 @@ class UiExecutionService:
                         value_source=value_source,
                         value_sensitivity=sensitivity,
                         value_display=value_display,
+                        evidence_artifact_ids=_action_artifact_ids(verb, artifact_ids),
                     )
                     raise
                 tape.record(
@@ -309,6 +347,7 @@ class UiExecutionService:
                     value_source=value_source,
                     value_sensitivity=sensitivity,
                     value_display=value_display,
+                    evidence_artifact_ids=_action_artifact_ids(verb, artifact_ids),
                 )
             actual_route = urlparse(page.url).path
             assertions.extend(_case_assertions(case_id, page, actual_route, network))
@@ -325,7 +364,7 @@ class UiExecutionService:
             page.screenshot(path=str(screenshot_path), full_page=True)
         finally:
             if not tracing_started:
-                context.tracing.start(screenshots=False, snapshots=False, sources=False)
+                context.tracing.start(screenshots=True, snapshots=True, sources=False)
             context.tracing.stop(path=str(trace_path))
             context.close()
         tape.record(
@@ -335,20 +374,67 @@ class UiExecutionService:
             state_before_route=actual_route or "/",
             state_after_route=actual_route or "/",
             status={"PASS": "completed", "FAIL": "failed"}.get(status, "error"),
+            evidence_artifact_ids=list(artifact_ids.values()),
         )
         action_tape = tape.finalize()
         duration_ms = max(0, round((time.perf_counter() - started) * 1000))
         screenshot_hash = _file_hash(screenshot_path)
         trace_hash = _file_hash(trace_path)
+        network_content = (_canonical({"observations": network}) + "\n").encode("utf-8")
+        console_content = (
+            _canonical(
+                {
+                    "entries": console_entries,
+                    "page_errors": page_errors,
+                    "redaction_applied": True,
+                }
+            )
+            + "\n"
+        ).encode("utf-8")
+        network_path.write_bytes(network_content)
+        console_path.write_bytes(console_content)
         evidence = {
-            "schema_version": "ui-execution-evidence@1.0.0",
+            "schema_version": UI_EVIDENCE_SCHEMA_VERSION,
+            "run_id": run_id,
+            "result_id": result_id,
             "case_id": case_id,
+            "case_version": int(snapshot["case_version"]),
             "snapshot_id": row["immutable_execution_snapshot_id"],
-            "screenshot_path": _relative(screenshot_path),
-            "screenshot_hash": screenshot_hash,
-            "trace_path": _relative(trace_path),
-            "trace_hash": trace_hash,
-            "network_observations": network,
+            "executor_version": UI_EXECUTOR_VERSION,
+            "browser": _browser_metadata(browser, self._browser_channel),
+            "viewport": {**VIEWPORT, "device_scale_factor": 1},
+            "screenshot": {
+                "artifact_id": artifact_ids["screenshot"],
+                "relative_path": _relative(screenshot_path),
+                "sha256": screenshot_hash,
+                "capture_kind": "final" if status == "PASS" else "failure",
+                "full_page": True,
+            },
+            "trace": {
+                "artifact_id": artifact_ids["trace"],
+                "relative_path": _relative(trace_path),
+                "sha256": trace_hash,
+                "screenshots": True,
+                "snapshots": True,
+                "sources": False,
+                "sensitive_input_actions_excluded": True,
+            },
+            "network": {
+                "artifact_id": artifact_ids["network"],
+                "relative_path": _relative(network_path),
+                "sha256": hashlib.sha256(network_content).hexdigest(),
+                "capture_enabled": True,
+                "observations": network,
+            },
+            "console": {
+                "artifact_id": artifact_ids["console"],
+                "relative_path": _relative(console_path),
+                "sha256": hashlib.sha256(console_content).hexdigest(),
+                "capture_enabled": True,
+                "entries": console_entries,
+                "page_errors": page_errors,
+                "redaction_applied": True,
+            },
             "adapter_transformations": adapter_audit,
             "action_tape": {
                 "writer_version": ACTION_TAPE_WRITER_VERSION,
@@ -358,6 +444,8 @@ class UiExecutionService:
             },
             "redaction_applied": True,
         }
+        if list(self.evidence_validator.iter_errors(evidence)):
+            raise UiExecutionError("UI_EVIDENCE_SCHEMA_INVALID")
         evidence_hash = hashlib.sha256(_canonical(evidence).encode("utf-8")).hexdigest()
         result = {
             "schema_version": UI_RESULT_SCHEMA_VERSION,
@@ -425,6 +513,64 @@ def _ui_target(verb: str, strategy: str, value: str) -> dict[str, Any]:
         "path": None,
         "method": None,
     }
+
+
+def _action_artifact_ids(verb: str, artifact_ids: dict[str, str]) -> list[str]:
+    if verb in {"goto", "click"}:
+        return [artifact_ids["trace"], artifact_ids["network"]]
+    return []
+
+
+def _browser_metadata(browser: Browser, channel: str) -> dict[str, Any]:
+    browser_type = getattr(browser, "browser_type", None)
+    engine = str(getattr(browser_type, "name", "unknown-test-double"))
+    raw_version = getattr(browser, "version", "unknown-test-double")
+    version = raw_version() if callable(raw_version) else raw_version
+    return {
+        "engine": engine,
+        "channel": channel,
+        "version": str(version),
+        "headless": True,
+    }
+
+
+def _redact_browser_text(value: str, sensitive_values: set[str]) -> str:
+    redacted = value
+    for secret in sensitive_values:
+        if secret:
+            redacted = redacted.replace(secret, "[REDACTED]")
+    redacted = re.sub(
+        r"(?i)(password|token|cookie|authorization)(\s*[:=]\s*)[^\s,;]+",
+        r"\1\2[REDACTED]",
+        redacted,
+    )
+    return redacted[:1000]
+
+
+def _record_console(message: Any, target: list[dict[str, Any]], sensitive_values: set[str]) -> None:
+    target.append(
+        {
+            "sequence": len(target) + 1,
+            "level": str(getattr(message, "type", "unknown"))[:40],
+            "text": _redact_browser_text(str(getattr(message, "text", "")), sensitive_values),
+            "captured_at": _utc_timestamp(),
+        }
+    )
+
+
+def _record_page_error(
+    error: Any, target: list[dict[str, Any]], sensitive_values: set[str]
+) -> None:
+    target.append(
+        {
+            "sequence": len(target) + 1,
+            "name": str(getattr(error, "name", type(error).__name__))[:120],
+            "message": _redact_browser_text(
+                str(getattr(error, "message", str(error))), sensitive_values
+            ),
+            "captured_at": _utc_timestamp(),
+        }
+    )
 
 
 def _ui_values(case: dict[str, Any]) -> tuple[dict[str, str], list[dict[str, str]]]:

@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-testpilot.local/schemas/evidence/v2/ui_execution_evidence.schema.json",
+  "title": "AI TestPilot Playwright UI execution evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "result_id",
+    "case_id",
+    "case_version",
+    "snapshot_id",
+    "executor_version",
+    "browser",
+    "viewport",
+    "screenshot",
+    "trace",
+    "network",
+    "console",
+    "action_tape",
+    "adapter_transformations",
+    "redaction_applied"
+  ],
+  "properties": {
+    "schema_version": { "const": "ui-execution-evidence@2.0.0" },
+    "run_id": { "type": "string", "pattern": "^UIR-[A-F0-9]{32}$" },
+    "result_id": { "type": "string", "pattern": "^UIRES-[A-F0-9]{32}$" },
+    "case_id": { "type": "string", "pattern": "^TC-UI-[A-Z0-9-]+$" },
+    "case_version": { "type": "integer", "minimum": 1 },
+    "snapshot_id": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "executor_version": { "const": "ui-executor@1.0.0" },
+    "browser": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["engine", "channel", "version", "headless"],
+      "properties": {
+        "engine": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "channel": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "version": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "headless": { "const": true }
+      }
+    },
+    "viewport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height", "device_scale_factor"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 320, "maximum": 7680 },
+        "height": { "type": "integer", "minimum": 320, "maximum": 4320 },
+        "device_scale_factor": { "type": "number", "exclusiveMinimum": 0, "maximum": 4 }
+      }
+    },
+    "screenshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "relative_path", "sha256", "capture_kind", "full_page"],
+      "properties": {
+        "artifact_id": { "$ref": "#/$defs/artifactId" },
+        "relative_path": { "$ref": "#/$defs/relativePath" },
+        "sha256": { "$ref": "#/$defs/hash" },
+        "capture_kind": { "enum": ["final", "failure"] },
+        "full_page": { "const": true }
+      }
+    },
+    "trace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "relative_path",
+        "sha256",
+        "screenshots",
+        "snapshots",
+        "sources",
+        "sensitive_input_actions_excluded"
+      ],
+      "properties": {
+        "artifact_id": { "$ref": "#/$defs/artifactId" },
+        "relative_path": { "$ref": "#/$defs/relativePath" },
+        "sha256": { "$ref": "#/$defs/hash" },
+        "screenshots": { "const": true },
+        "snapshots": { "const": true },
+        "sources": { "const": false },
+        "sensitive_input_actions_excluded": { "const": true }
+      }
+    },
+    "network": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "relative_path", "sha256", "capture_enabled", "observations"],
+      "properties": {
+        "artifact_id": { "$ref": "#/$defs/artifactId" },
+        "relative_path": { "$ref": "#/$defs/relativePath" },
+        "sha256": { "$ref": "#/$defs/hash" },
+        "capture_enabled": { "const": true },
+        "observations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["method", "path", "status"],
+            "properties": {
+              "method": { "type": "string", "minLength": 1, "maxLength": 12 },
+              "path": { "type": "string", "pattern": "^/", "maxLength": 300 },
+              "status": { "type": "integer", "minimum": 100, "maximum": 599 }
+            }
+          }
+        }
+      }
+    },
+    "console": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "relative_path",
+        "sha256",
+        "capture_enabled",
+        "entries",
+        "page_errors",
+        "redaction_applied"
+      ],
+      "properties": {
+        "artifact_id": { "$ref": "#/$defs/artifactId" },
+        "relative_path": { "$ref": "#/$defs/relativePath" },
+        "sha256": { "$ref": "#/$defs/hash" },
+        "capture_enabled": { "const": true },
+        "entries": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/consoleEntry" }
+        },
+        "page_errors": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/pageError" }
+        },
+        "redaction_applied": { "const": true }
+      }
+    },
+    "action_tape": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["writer_version", "media_type", "sha256", "events"],
+      "properties": {
+        "writer_version": { "const": "action-tape-writer@1.0.0" },
+        "media_type": { "const": "application/x-ndjson" },
+        "sha256": { "$ref": "#/$defs/hash" },
+        "events": { "type": "array", "minItems": 1, "items": { "type": "object" } }
+      }
+    },
+    "adapter_transformations": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "redaction_applied": { "const": true }
+  },
+  "$defs": {
+    "artifactId": { "type": "string", "pattern": "^ART-[A-F0-9]{32}$" },
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9._/-]+$"
+    },
+    "consoleEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sequence", "level", "text", "captured_at"],
+      "properties": {
+        "sequence": { "type": "integer", "minimum": 1 },
+        "level": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "text": { "type": "string", "maxLength": 1000 },
+        "captured_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "pageError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sequence", "name", "message", "captured_at"],
+      "properties": {
+        "sequence": { "type": "integer", "minimum": 1 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "message": { "type": "string", "maxLength": 1000 },
+        "captured_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

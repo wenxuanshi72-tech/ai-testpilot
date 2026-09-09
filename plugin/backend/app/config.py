@@ -6,6 +6,8 @@ from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_DATABASE_PATH = PROJECT_ROOT / "instance" / "plugin.db"
+DEFAULT_RUN_BUNDLE_ROOT = PROJECT_ROOT / "artifacts" / "run-bundles"
+DEFAULT_REPRODUCTION_ROOT = PROJECT_ROOT / "artifacts" / "reproductions"
 
 
 class PluginConfig:
@@ -14,6 +16,12 @@ class PluginConfig:
         return {
             "PLUGIN_DATABASE_URL": os.getenv(
                 "PLUGIN_DATABASE_URL", f"sqlite:///{DEFAULT_DATABASE_PATH.as_posix()}"
+            ),
+            "RUN_ARTIFACT_BUNDLE_ROOT": os.getenv(
+                "RUN_ARTIFACT_BUNDLE_ROOT", str(DEFAULT_RUN_BUNDLE_ROOT)
+            ),
+            "BUG_REPRODUCTION_ROOT": os.getenv(
+                "BUG_REPRODUCTION_ROOT", str(DEFAULT_REPRODUCTION_ROOT)
             ),
             "DEEPSEEK_BASE_URL": os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
             "DEEPSEEK_MODEL": os.getenv("DEEPSEEK_MODEL", "deepseek-v4-pro"),

@@ -24,9 +24,31 @@ export interface WorkspaceSnapshot {
   meta: { source: string; provider_mode: string | null; environment_id: string | null };
 }
 
+export interface EvidenceTrustReport {
+  policy_version: string;
+  evaluator_version: string;
+  bundle_verifier_version: string;
+  state: "UNVERIFIED" | "EXECUTED" | "VERIFIED";
+  reason: string;
+  run_id: string | null;
+  bundle_hash: string | null;
+  reproduction_result_id: string | null;
+}
+
 const client = axios.create({ baseURL: "/api/v1", timeout: 10_000 });
 
 export async function loadWorkspace(): Promise<WorkspaceSnapshot> {
   const response = await client.get<{ data: WorkspaceSnapshot }>("/workspace");
+  return response.data.data;
+}
+
+export async function evaluateEvidenceTrust(
+  runId: string,
+  reproductionPackageName?: string,
+): Promise<EvidenceTrustReport> {
+  const response = await client.post<{ data: EvidenceTrustReport }>("/evidence-trust/evaluations", {
+    run_id: runId,
+    ...(reproductionPackageName ? { reproduction_package_name: reproductionPackageName } : {}),
+  });
   return response.data.data;
 }

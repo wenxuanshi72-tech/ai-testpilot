@@ -6,6 +6,8 @@ import {
   Descriptions,
   Drawer,
   Empty,
+  Form,
+  Input,
   Layout,
   Menu,
   Progress,
@@ -19,7 +21,13 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
-import { loadWorkspace, type Row, type WorkspaceSnapshot } from "./api";
+import {
+  evaluateEvidenceTrust,
+  loadWorkspace,
+  type EvidenceTrustReport,
+  type Row,
+  type WorkspaceSnapshot,
+} from "./api";
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
@@ -324,7 +332,98 @@ function Evidence({ data }: { data: WorkspaceSnapshot }) {
       <Card title="Result and Bug classification">
         <DataTable rows={data.evidence.classifications} label="failure classifications" />
       </Card>
+      <TrustInspector />
     </Panel>
+  );
+}
+
+interface TrustFormFields {
+  runId: string;
+  reproductionPackageName?: string;
+}
+
+function TrustInspector() {
+  const [report, setReport] = useState<EvidenceTrustReport | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const evaluate = async (fields: TrustFormFields) => {
+    setLoading(true);
+    setError("");
+    setReport(null);
+    try {
+      setReport(
+        await evaluateEvidenceTrust(
+          fields.runId.trim(),
+          fields.reproductionPackageName?.trim() || undefined,
+        ),
+      );
+    } catch {
+      setError("Trust evaluation could not be completed. Verify the identifiers and retry.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const stateColor =
+    report?.state === "VERIFIED" ? "green" : report?.state === "EXECUTED" ? "blue" : "red";
+  return (
+    <Card title="Independent Trust Inspector" className="trust-inspector">
+      <Paragraph>
+        Recompute trust from portable artifacts. Stored database labels and model output are not
+        used as authority.
+      </Paragraph>
+      <Form<TrustFormFields>
+        layout="vertical"
+        onFinish={(fields) => void evaluate(fields)}
+        requiredMark={false}
+      >
+        <div className="trust-form-grid">
+          <Form.Item
+            name="runId"
+            label="Run ID"
+            rules={[{ required: true, message: "Enter a Run ID." }]}
+          >
+            <Input autoComplete="off" placeholder={`RUN-${"A".repeat(32)}`} />
+          </Form.Item>
+          <Form.Item name="reproductionPackageName" label="Reproduction package name (optional)">
+            <Input autoComplete="off" placeholder="bug-auth-001--run-..." />
+          </Form.Item>
+        </div>
+        <Button type="primary" htmlType="submit" loading={loading}>
+          Evaluate trust
+        </Button>
+      </Form>
+      {error ? <Alert className="trust-result" type="error" showIcon message={error} /> : null}
+      {report ? (
+        <section className="trust-result" aria-live="polite" aria-label="Trust evaluation result">
+          <Space wrap>
+            <Text strong>Recomputed state</Text>
+            <Tag color={stateColor}>{report.state}</Tag>
+          </Space>
+          <Descriptions
+            column={1}
+            size="small"
+            items={[
+              { key: "reason", label: "Reason", children: report.reason },
+              { key: "run", label: "Run", children: report.run_id ?? "Not resolved" },
+              {
+                key: "hash",
+                label: "Bundle hash",
+                children: <Text code>{report.bundle_hash ?? "Not resolved"}</Text>,
+              },
+              {
+                key: "reproduction",
+                label: "Reproduction result",
+                children: report.reproduction_result_id ?? "Not supplied",
+              },
+              { key: "policy", label: "Policy", children: report.policy_version },
+              { key: "evaluator", label: "Evaluator", children: report.evaluator_version },
+            ]}
+          />
+        </section>
+      ) : null}
+    </Card>
   );
 }
 

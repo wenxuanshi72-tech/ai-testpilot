@@ -91,6 +91,12 @@ A reproduction Bundle is a new Run. It references the immutable source Run, Resu
 snapshot hash and Bug ID but owns new timestamps, evidence and hashes. It may not copy the original
 Result or Evidence and call that reproduction.
 
+Authenticity hardening step 5 implements the independent comparison and packaging boundary. The
+reproduction Result is stored in an outer package rather than inside the reproduction Run Bundle:
+placing a Result that contains `reproduction_manifest_hash` inside that same Manifest would create
+an impossible circular hash. The outer package copies and revalidates both immutable Bundles before
+binding their manifests to the deterministic reproduction Result.
+
 ## Privacy
 
 Manifests never contain passwords, cookies, tokens, Authorization values, API keys, absolute local

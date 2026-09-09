@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-testpilot.local/schemas/reproduction/v1/reproduction_observation.schema.json",
+  "title": "AI TestPilot deterministic reproduction observation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "executor",
+    "result_id",
+    "case_id",
+    "case_version",
+    "snapshot_id",
+    "snapshot_hash",
+    "status",
+    "expected",
+    "actual",
+    "determined_by"
+  ],
+  "properties": {
+    "schema_version": { "const": "reproduction-observation@1.0.0" },
+    "executor": { "enum": ["api", "ui"] },
+    "result_id": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "case_id": { "type": "string", "pattern": "^TC-(API|UI)-[A-Z0-9-]+$" },
+    "case_version": { "type": "integer", "minimum": 1 },
+    "snapshot_id": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "snapshot_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "status": { "enum": ["PASS", "FAIL", "BLOCKED", "ERROR", "SKIPPED"] },
+    "expected": {},
+    "actual": {},
+    "determined_by": { "const": "deterministic_assertions" }
+  }
+}

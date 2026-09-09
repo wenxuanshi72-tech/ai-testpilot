@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any, cast
 
 from flask import Blueprint, current_app, jsonify, request
@@ -16,6 +17,10 @@ from plugin.backend.app.bug_artifacts import BugArtifactError, BugArtifactServic
 from plugin.backend.app.database import PluginDatabase
 from plugin.backend.app.errors import ApiError, request_id
 from plugin.backend.app.evidence import EvidenceError, EvidenceService
+from plugin.backend.app.evidence_trust_service import (
+    EvidenceTrustRequestError,
+    EvidenceTrustService,
+)
 from plugin.backend.app.ids import new_id
 from plugin.backend.app.prompts import PROMPT_VERSION, SCHEMA_VERSION, PromptRegistry
 from plugin.backend.app.providers import DeepSeekProvider, LLMProvider, MockLLMProvider
@@ -115,6 +120,13 @@ def _test_report_service() -> TestReportService:
     return TestReportService(_database())
 
 
+def _evidence_trust_service() -> EvidenceTrustService:
+    return EvidenceTrustService(
+        Path(current_app.config["RUN_ARTIFACT_BUNDLE_ROOT"]),
+        Path(current_app.config["BUG_REPRODUCTION_ROOT"]),
+    )
+
+
 @api.get("/health")
 def health() -> tuple[Any, int]:
     database_ready = _database().fetch_one("SELECT 1 AS ready") == {"ready": 1}
@@ -128,6 +140,27 @@ def health() -> tuple[Any, int]:
             "meta": {"request_id": request_id()},
         }
     ), 200
+
+
+@api.post("/evidence-trust/evaluations")
+def evaluate_evidence_trust() -> tuple[Any, int]:
+    payload = _json_object()
+    run_id = payload.get("run_id")
+    package_name = payload.get("reproduction_package_name")
+    if not isinstance(run_id, str) or (
+        package_name is not None and not isinstance(package_name, str)
+    ):
+        raise ApiError("VALIDATION_ERROR", "Trust evaluation identifiers are invalid.", 422)
+    try:
+        result = _evidence_trust_service().evaluate(run_id, package_name)
+    except EvidenceTrustRequestError as error:
+        raise ApiError(
+            "VALIDATION_ERROR",
+            "Trust evaluation identifiers are invalid.",
+            422,
+            [{"field": "identifiers", "code": str(error)}],
+        ) from error
+    return jsonify({"data": result, "meta": {"request_id": request_id()}}), 200
 
 
 @api.get("/workspace")

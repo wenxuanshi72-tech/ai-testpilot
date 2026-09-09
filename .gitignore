@@ -45,6 +45,8 @@ artifacts/exports/*
 !artifacts/exports/.gitkeep
 artifacts/logs/*
 !artifacts/logs/.gitkeep
+artifacts/run-bundles/
+artifacts/reproductions/
 /evidence/
 /reports/generated/
 /logs/
